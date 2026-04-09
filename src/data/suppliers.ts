@@ -1,0 +1,68 @@
+import { Supplier } from "@/lib/types";
+
+export const suppliers: Supplier[] = [
+  {
+    id: "SUP-001",
+    name: "Eastway Textiles",
+    categories: ["Outerwear", "Tops"],
+    moq: 200,
+    leadTimeDays: 10,
+    contactEmail: "orders@eastwaytextiles.com",
+  },
+  {
+    id: "SUP-002",
+    name: "Milano Fabric Co.",
+    categories: ["Dresses", "Accessories"],
+    moq: 100,
+    leadTimeDays: 14,
+    contactEmail: "supply@milanofabric.co",
+  },
+  {
+    id: "SUP-003",
+    name: "Pacific Stitch Works",
+    categories: ["Denim", "Bottoms"],
+    moq: 150,
+    leadTimeDays: 8,
+    contactEmail: "procurement@pacificstitch.com",
+  },
+  {
+    id: "SUP-004",
+    name: "Summit Athletic Supply",
+    categories: ["Activewear"],
+    moq: 300,
+    leadTimeDays: 7,
+    contactEmail: "wholesale@summitathletic.com",
+  },
+  {
+    id: "SUP-005",
+    name: "Artisan Leather Goods",
+    categories: ["Footwear", "Accessories"],
+    moq: 50,
+    leadTimeDays: 12,
+    contactEmail: "orders@artisanleather.com",
+  },
+  {
+    id: "SUP-006",
+    name: "Nordic Wool Collective",
+    categories: ["Outerwear", "Tops"],
+    moq: 100,
+    leadTimeDays: 14,
+    contactEmail: "info@nordicwool.co",
+  },
+  {
+    id: "SUP-007",
+    name: "Coastal Cotton Mills",
+    categories: ["Tops", "Dresses"],
+    moq: 250,
+    leadTimeDays: 6,
+    contactEmail: "sales@coastalcotton.com",
+  },
+  {
+    id: "SUP-008",
+    name: "Urban Thread Group",
+    categories: ["Bottoms", "Denim", "Activewear"],
+    moq: 500,
+    leadTimeDays: 5,
+    contactEmail: "bulk@urbanthread.com",
+  },
+];
