@@ -223,7 +223,7 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label className="text-sm mb-1.5">Currency</Label>
-            <Select value={currency} onValueChange={setCurrency}>
+            <Select value={currency} onValueChange={(v) => v && setCurrency(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -236,7 +236,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <Label className="text-sm mb-1.5">Units</Label>
-            <Select value={units} onValueChange={setUnits}>
+            <Select value={units} onValueChange={(v) => v && setUnits(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -248,7 +248,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <Label className="text-sm mb-1.5">Date Format</Label>
-            <Select value={dateFormat} onValueChange={setDateFormat}>
+            <Select value={dateFormat} onValueChange={(v) => v && setDateFormat(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

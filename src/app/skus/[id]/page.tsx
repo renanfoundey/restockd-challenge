@@ -248,7 +248,7 @@ export default function SkuDetailPage() {
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip
                     contentStyle={{ fontSize: 12 }}
-                    labelFormatter={(v: string) => `Date: ${v}`}
+                    labelFormatter={(v) => `Date: ${v}`}
                   />
                   <ReferenceLine
                     y={sku.reorderPoint}

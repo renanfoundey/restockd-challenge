@@ -355,7 +355,7 @@ export default function ParametersPage() {
           </div>
           <div>
             <Label className="text-sm mb-1.5">MOQ Rounding</Label>
-            <Select value={moqRounding} onValueChange={setMoqRounding}>
+            <Select value={moqRounding} onValueChange={(v) => v && setMoqRounding(v)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -396,7 +396,7 @@ export default function ParametersPage() {
                 <TableCell>
                   <Select
                     value={o.reorderFrequency}
-                    onValueChange={(v) => updateOverride(i, "reorderFrequency", v)}
+                    onValueChange={(v) => v && updateOverride(i, "reorderFrequency", v)}
                   >
                     <SelectTrigger className="w-32">
                       <SelectValue />

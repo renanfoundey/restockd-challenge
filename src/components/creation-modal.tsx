@@ -96,7 +96,7 @@ export function CreationModal({
             </div>
             <div>
               <Label className="text-sm mb-1.5">Warehouse</Label>
-              <Select value={warehouseId} onValueChange={setWarehouseId}>
+              <Select value={warehouseId} onValueChange={(v) => v && setWarehouseId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select warehouse..." />
                 </SelectTrigger>
@@ -111,7 +111,7 @@ export function CreationModal({
             </div>
             <div>
               <Label className="text-sm mb-1.5">Store</Label>
-              <Select value={storeId} onValueChange={setStoreId}>
+              <Select value={storeId} onValueChange={(v) => v && setStoreId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select store..." />
                 </SelectTrigger>

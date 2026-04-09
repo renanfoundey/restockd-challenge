@@ -71,7 +71,7 @@ export default function SkusPage() {
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
-        <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
+        <Select value={categoryFilter} onValueChange={(v) => { if (v) { setCategoryFilter(v); setPage(1); } }}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
@@ -82,7 +82,7 @@ export default function SkusPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={supplierFilter} onValueChange={(v) => { setSupplierFilter(v); setPage(1); }}>
+        <Select value={supplierFilter} onValueChange={(v) => { if (v) { setSupplierFilter(v); setPage(1); } }}>
           <SelectTrigger className="w-48">
             <SelectValue placeholder="Supplier" />
           </SelectTrigger>
@@ -93,7 +93,7 @@ export default function SkusPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+        <Select value={statusFilter} onValueChange={(v) => { if (v) { setStatusFilter(v); setPage(1); } }}>
           <SelectTrigger className="w-36">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
