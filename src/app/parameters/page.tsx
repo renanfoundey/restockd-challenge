@@ -151,7 +151,7 @@ export default function ParametersPage() {
       return;
     }
 
-    const newSkus: SKU[] = csvPreview.map((row) => {
+    const newSkus: SKU[] = csvPreview.map((row, idx) => {
       const currentStock = parseInt(row[stockIdx] || "0") || 0;
       const avgDailySales = parseInt(row[salesIdx] || "0") || 0;
       const daysOfSupply = avgDailySales === 0 ? 0 : Math.floor(currentStock / avgDailySales);
@@ -170,7 +170,7 @@ export default function ParametersPage() {
         supplierName: row[supNameIdx] || "Unknown Supplier",
         unitCost: parseFloat(row[costIdx] || "0") || 0,
         leadTimeDays,
-        imageUrl: `https://loremflickr.com/400/600/clothing?lock=${Math.floor(Math.random() * 200)}`,
+        imageUrl: `/images/products/product-${String((idx % 30) + 1).padStart(2, "0")}.jpg`,
       };
     });
 

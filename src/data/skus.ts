@@ -7,6 +7,9 @@ function computeStatus(daysOfSupply: number): SKU["status"] {
   return "In Stock";
 }
 
+// Product images stored locally in /public/images/products/
+const PRODUCT_IMAGE_COUNT = 30;
+
 function sku(
   id: string,
   productName: string,
@@ -36,7 +39,7 @@ function sku(
     supplierName,
     unitCost,
     leadTimeDays,
-    imageUrl: `https://loremflickr.com/400/600/clothing?lock=${imageIndex}`,
+    imageUrl: `/images/products/product-${String(((imageIndex - 1) % PRODUCT_IMAGE_COUNT) + 1).padStart(2, "0")}.jpg`,
   };
 }
 
