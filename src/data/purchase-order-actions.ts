@@ -20,7 +20,10 @@ function expandItems(base: POLineItem[], targetCount: number): POLineItem[] {
   while (result.length < targetCount) {
     const src = base[i % base.length];
     const seed = (i * 13) % 17;
-    const qtyMul = 0.6 + (seed / 17) * 1.2;
+    // Per-line qty around 0.18–0.4 of base so a typical replenishment action
+    // totals $300K–$900K — the realistic per-cycle PO size an inventory
+    // manager plans against at this brand scale.
+    const qtyMul = 0.18 + (seed / 17) * 0.22;
     const quantity = Math.max(20, Math.round(src.quantity * qtyMul));
     const lineTotal = Math.round(quantity * src.unitCost * 100) / 100;
     result.push({
@@ -153,7 +156,7 @@ export const purchaseOrderActions: PurchaseOrderAction[] = [
     storeIds: summitDest.storeIds,
     storeNames: summitDest.storeNames,
     categories: ["Activewear"],
-    status: "Approved",
+    status: "Sent to Provider",
     createdDate: "2026-03-30",
     skuCount: summitItems.length,
     totalValue: totalOf(summitItems),
@@ -175,7 +178,7 @@ export const purchaseOrderActions: PurchaseOrderAction[] = [
     storeIds: coastalDest.storeIds,
     storeNames: coastalDest.storeNames,
     categories: ["Tops", "Dresses"],
-    status: "Ready",
+    status: "Processing",
     createdDate: "2026-04-01",
     skuCount: coastalItems.length,
     totalValue: totalOf(coastalItems),
@@ -197,7 +200,7 @@ export const purchaseOrderActions: PurchaseOrderAction[] = [
     storeIds: milanoDest.storeIds,
     storeNames: milanoDest.storeNames,
     categories: ["Dresses", "Accessories"],
-    status: "Draft",
+    status: "Suggested",
     createdDate: "2026-04-02",
     skuCount: milanoItems.length,
     totalValue: totalOf(milanoItems),

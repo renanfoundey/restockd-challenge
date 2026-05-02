@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { TopDrivers } from "@/components/top-drivers";
 import { usePaginated, PaginatorControls } from "@/components/paginator";
+import { SkuLineStatusBadge } from "@/components/action-line-status";
+import { SendToIntegration } from "@/components/send-to-integration";
 import { purchaseOrderActions } from "@/data/purchase-order-actions";
 import { skus } from "@/data/skus";
 import { suppliers } from "@/data/suppliers";
@@ -96,7 +98,8 @@ export default function ReplenishmentDetailPage() {
             Created {action.createdDate} · Supplier {action.supplierName}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <SendToIntegration actionName={action.name} noun="replenishment" />
           <Button variant="outline" size="sm" onClick={handleShare}>
             <ShareIcon />
             {copied ? "Copied!" : "Share"}
@@ -197,26 +200,27 @@ function ReplenishmentReasoning({ action }: { action: PurchaseOrderAction }) {
             </h3>
           </div>
           <p className="text-sm text-foreground leading-relaxed">
-            Replenishment buys new inventory from {action.supplierName} and
-            distributes it across the network: manufacturer → warehouse →
-            store. {action.lineItems.length.toLocaleString()} line items
-            totaling{" "}
+            The forecast flagged{" "}
+            <strong className="font-semibold tabular-nums">
+              {action.lineItems.length.toLocaleString()}
+            </strong>{" "}
+            SKUs from {action.supplierName} as below reorder point or
+            projected to drop below it within {supplier?.leadTimeDays ?? 14}{" "}
+            days, totaling{" "}
             <strong className="font-semibold tabular-nums">
               {totalUnits.toLocaleString()} units
             </strong>
-            . The forecast flagged these SKUs as below their reorder point or
-            projected to drop below it within {supplier?.leadTimeDays ?? 14}{" "}
-            days. Bundling them meets MOQ {supplier?.moq ?? "—"} efficiently
+            . Bundling them clears the supplier MOQ of {supplier?.moq ?? "—"}{" "}
             and lands stock by {action.expectedDelivery}. Cost outlay{" "}
             <strong className="font-semibold tabular-nums">
               ${action.totalValue.toLocaleString()}
             </strong>{" "}
-            against projected 30-day revenue of{" "}
+            should generate{" "}
             <strong className="font-semibold tabular-nums">
               ${Math.round(projectedRevenue).toLocaleString()}
             </strong>{" "}
-            (assuming {Math.round(SELL_THROUGH * 100)}% sell-through at{" "}
-            {MARKUP.toFixed(1)}× markup), for a projected gross profit of{" "}
+            in 30-day revenue at {Math.round(SELL_THROUGH * 100)}% sell-through
+            and a {MARKUP.toFixed(1)}× markup, for a projected gross profit of{" "}
             <strong className="font-semibold tabular-nums text-success-foreground">
               ${Math.round(projectedProfit).toLocaleString()}
             </strong>
@@ -256,6 +260,7 @@ function LineItemsTable({ action }: { action: PurchaseOrderAction }) {
               <TableHead className="text-right">Qty</TableHead>
               <TableHead className="text-right hidden md:table-cell">Unit Cost</TableHead>
               <TableHead className="text-right">Line Total</TableHead>
+              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -302,6 +307,13 @@ function LineItemsTable({ action }: { action: PurchaseOrderAction }) {
                   <TableCell className="text-right tabular-nums">
                     ${item.lineTotal.toLocaleString()}
                   </TableCell>
+                  <TableCell>
+                    <SkuLineStatusBadge
+                      status={action.status}
+                      flow="replenishment"
+                      idx={idx}
+                    />
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -312,6 +324,7 @@ function LineItemsTable({ action }: { action: PurchaseOrderAction }) {
               <TableCell className="text-right tabular-nums">
                 ${action.totalValue.toLocaleString()}
               </TableCell>
+              <TableCell />
             </TableRow>
           </TableBody>
         </Table>

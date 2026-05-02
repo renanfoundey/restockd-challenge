@@ -42,13 +42,15 @@ export interface PurchaseOrder {
   totalCost: number;
 }
 
-// Where the recommended units come from — drives whether reorder can ship
-// immediately to a store or has to wait for purchasing / production.
+// Where the recommended units come from. Reorder is internal — warehouse →
+// store — so a line can only be in one of three states: ready in warehouse,
+// arriving via an existing replenishment in transit, or being made via an
+// existing replenishment in production. New POs are out of scope here; if
+// nothing's in the pipeline the planner should open a Replenishment instead.
 export type ReorderAvailability =
-  | "in_warehouse" // Stock is sitting in a warehouse, ready to allocate today
-  | "in_transit" // PO already placed, en route from supplier
-  | "in_production" // Manufacturer is making it; not yet shipped
-  | "needs_po"; // Nothing exists yet — a new PO has to be cut
+  | "in_warehouse"
+  | "in_transit"
+  | "in_production";
 
 export interface ReorderRecommendation {
   skuId: string;
@@ -141,7 +143,13 @@ export interface InventoryAction {
   storeIds?: string[];
   storeNames?: string[];
   categories: string[];
-  status: "Draft" | "Processing" | "Ready" | "Approved" | "Completed";
+  // Global action status — uniform across Replenishment / Reorder / Rebalance.
+  status:
+    | "Suggested"
+    | "Ready to Send"
+    | "Sent to Provider"
+    | "Processing"
+    | "Completed";
   createdDate: string;
   skuCount: number;
   totalValue: number;

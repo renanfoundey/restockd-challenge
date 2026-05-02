@@ -73,7 +73,7 @@ export default function ReorderingPage() {
       storeIds: selectedStores.map((s) => s.id),
       storeNames: selectedStores.map((s) => s.name),
       categories: config.categories,
-      status: "Ready",
+      status: "Ready to Send",
       createdDate: new Date().toISOString().split("T")[0],
       skuCount: recs.length,
       totalValue: recs.reduce((sum, r) => sum + r.estimatedCost, 0),

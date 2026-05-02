@@ -87,7 +87,7 @@ export default function ReplenishmentPage() {
       storeIds: selectedStores.map((s) => s.id),
       storeNames: selectedStores.map((s) => s.name),
       categories: config.categories,
-      status: "Ready",
+      status: "Ready to Send",
       createdDate: new Date().toISOString().split("T")[0],
       skuCount: lineItems.length,
       totalValue: lineItems.reduce((sum, li) => sum + li.lineTotal, 0),

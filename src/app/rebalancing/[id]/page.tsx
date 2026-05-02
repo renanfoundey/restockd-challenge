@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { TopDrivers } from "@/components/top-drivers";
 import { usePaginated, PaginatorControls } from "@/components/paginator";
+import { SkuLineStatusBadge } from "@/components/action-line-status";
+import { SendToIntegration } from "@/components/send-to-integration";
 import { skus } from "@/data/skus";
 import { stores } from "@/data/stores";
 import { rebalanceActions } from "@/data/rebalance-actions";
@@ -124,7 +126,8 @@ export default function RebalanceDetailPage() {
             Created {action.createdDate}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <SendToIntegration actionName={action.name} noun="rebalance" />
           <Button variant="outline" size="sm" onClick={handleShare}>
             <ShareIcon />
             {copied ? "Copied!" : "Share"}
@@ -171,7 +174,10 @@ export default function RebalanceDetailPage() {
         description={`Top SKUs by value across ${action.suggestions.length} suggestions.`}
       />
 
-      <SuggestionsTable suggestions={action.suggestions} />
+      <SuggestionsTable
+        suggestions={action.suggestions}
+        actionStatus={action.status}
+      />
     </div>
   );
 }
@@ -208,19 +214,20 @@ function RebalanceReasoning({ action }: { action: RebalanceAction }) {
             </h3>
           </div>
           <p className="text-sm text-foreground leading-relaxed">
-            Rebalancing moves existing store inventory store-to-store — no
-            warehouse hop, no purchase order, no supplier lead time. The
-            forecast model spotted stores holding excess stock against soft
-            demand while sister stores are flagged Critical or Low Stock.
-            Executing these{" "}
+            The forecast model spotted{" "}
+            {sourceStores.size} store{sourceStores.size === 1 ? "" : "s"}{" "}
+            holding excess stock against soft demand while{" "}
+            {destStores.size} sister store
+            {destStores.size === 1 ? " is" : "s are"} flagged Critical or Low
+            Stock on the same SKUs. The{" "}
             <strong className="font-semibold tabular-nums">
               {action.suggestions.length.toLocaleString()}
             </strong>{" "}
-            transfers totals{" "}
+            suggested transfers totaling{" "}
             <strong className="font-semibold tabular-nums">
               {totalQty.toLocaleString()} units
             </strong>{" "}
-            and should clear the donor stores and restore coverage at the
+            should clear the donor stores and restore coverage at the
             destinations within a few business days.
           </p>
         </div>
@@ -231,8 +238,10 @@ function RebalanceReasoning({ action }: { action: RebalanceAction }) {
 
 function SuggestionsTable({
   suggestions,
+  actionStatus,
 }: {
   suggestions: RebalanceAction["suggestions"];
+  actionStatus: RebalanceAction["status"];
 }) {
   const pager = usePaginated(suggestions, 25);
   return (
@@ -256,11 +265,12 @@ function SuggestionsTable({
               <TableHead className="hidden md:table-cell">From Store</TableHead>
               <TableHead className="hidden md:table-cell">To Store</TableHead>
               <TableHead className="text-right">Qty</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="hidden xl:table-cell">Reason</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pager.slice.map((item) => {
+            {pager.slice.map((item, idx) => {
               const { color, size } = splitVariant(item.variant);
               return (
                 <TableRow key={item.id}>
@@ -297,6 +307,13 @@ function SuggestionsTable({
                   <TableCell className="text-right tabular-nums font-medium">
                     {item.suggestedQty}
                   </TableCell>
+                  <TableCell>
+                    <SkuLineStatusBadge
+                      status={actionStatus}
+                      flow="rebalance"
+                      idx={idx}
+                    />
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-sm whitespace-normal hidden xl:table-cell">
                     {item.reason}
                   </TableCell>
@@ -310,6 +327,7 @@ function SuggestionsTable({
     </div>
   );
 }
+
 
 function MetricCard({
   label,

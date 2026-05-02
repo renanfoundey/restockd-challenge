@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -9,6 +9,8 @@ import { suppliers } from "@/data/suppliers";
 import { recommendations } from "@/data/recommendations";
 import { rebalancingSuggestions } from "@/data/rebalancing";
 import { purchaseOrderActions } from "@/data/purchase-order-actions";
+import { marketplaceItems } from "@/data/marketplace";
+import { getItems } from "@/lib/storage";
 import { generateStockHistory, deriveForecastInsight } from "@/data/stock-history";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +98,48 @@ export default function SkuDetailPage() {
     () => (sku ? generateStockHistory(sku) : []),
     [sku]
   );
+
+  // Marketplace pre-buys = on-order inventory not yet received. Aggregate the
+  // ones that map to this SKU's category so the chart can show what's
+  // already in motion, and the planner can avoid double-ordering.
+  const [marketplaceOnOrder, setMarketplaceOnOrder] = useState<{
+    units: number;
+    value: number;
+    earliestEta: string | null;
+  }>({ units: 0, value: 0, earliestEta: null });
+
+  useEffect(() => {
+    if (!sku) return;
+    type BoughtRecord = {
+      id: string;
+      itemId: string;
+      quantity: number;
+      purchasedAt: string;
+      considerForReplen: boolean;
+      unitLandedCost: number;
+    };
+    const bought = getItems<BoughtRecord>("restockd_marketplace_bought");
+    let units = 0;
+    let value = 0;
+    let earliestEta: number | null = null;
+    for (const b of bought) {
+      const item = marketplaceItems.find((m) => m.id === b.itemId);
+      if (!item || item.category !== sku.category) continue;
+      const purchased = new Date(b.purchasedAt).getTime();
+      const eta = purchased + item.leadTimeDays * 86400000;
+      if (eta <= Date.now()) continue; // already landed
+      units += b.quantity;
+      value += b.quantity * b.unitLandedCost;
+      if (earliestEta === null || eta < earliestEta) earliestEta = eta;
+    }
+    setMarketplaceOnOrder({
+      units,
+      value,
+      earliestEta: earliestEta
+        ? new Date(earliestEta).toISOString().split("T")[0]
+        : null,
+    });
+  }, [sku]);
 
   const insight = useMemo(
     () => (sku ? deriveForecastInsight(sku) : null),
@@ -354,7 +398,7 @@ export default function SkuDetailPage() {
               </ResponsiveContainer>
             </div>
             {insight && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                     Days until reorder
@@ -378,6 +422,36 @@ export default function SkuDetailPage() {
                   <p className="text-sm font-semibold mt-0.5">
                     {insight.reorderDate ?? "—"}
                   </p>
+                </div>
+                <div
+                  className={
+                    marketplaceOnOrder.units > 0
+                      ? "rounded-lg border border-info/30 bg-info-soft/40 px-3 py-2"
+                      : "rounded-lg border border-border bg-muted/30 px-3 py-2"
+                  }
+                  title={
+                    marketplaceOnOrder.units > 0
+                      ? "Marketplace pre-buys in this category, not yet received. They reduce the projected gap and will flow into the next replenishment."
+                      : undefined
+                  }
+                >
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Marketplace on-order
+                  </p>
+                  {marketplaceOnOrder.units > 0 ? (
+                    <>
+                      <p className="text-sm font-semibold tabular-nums mt-0.5">
+                        {marketplaceOnOrder.units.toLocaleString()} units
+                      </p>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">
+                        {marketplaceOnOrder.earliestEta
+                          ? `arrives by ${marketplaceOnOrder.earliestEta}`
+                          : ""}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm font-semibold mt-0.5">—</p>
+                  )}
                 </div>
               </div>
             )}

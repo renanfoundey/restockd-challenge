@@ -1,9 +1,24 @@
+export type TrendSignalKind =
+  | "search"
+  | "social"
+  | "peer-brand"
+  | "weather"
+  | "campaign"
+  | "sell-through";
+
+export interface TrendSignal {
+  kind: TrendSignalKind;
+  label: string; // human-readable description
+  deltaPct?: number; // +/- % change vs baseline
+}
+
 export interface MarketplaceItem {
   id: string;
   productName: string;
   manufacturer: string;
   category: string;
   description: string;
+  // FOB / supplier ex-works price.
   unitPrice: number;
   moq: number;
   leadTimeDays: number;
@@ -12,6 +27,55 @@ export interface MarketplaceItem {
   inStock: boolean;
   imageUrl: string;
   tags: string[];
+  // === Landed cost components (planner-grade pricing) ===
+  // Per-unit shipping cost from supplier to your warehouse.
+  freightUnitCost: number;
+  // Tariff applied to FOB price; 0.18 = 18%.
+  dutyRate: number;
+  // Flat per-order inspection / broker fee (amortized in landed unit cost).
+  inspectionFee: number;
+  // === Supplier reliability scorecard ===
+  countryOfOrigin: string;
+  paymentTerms: string;
+  // Share of recent shipments that arrived on or before promised date.
+  onTimeDeliveryRate: number; // 0..1
+  // Defective / return rate observed over recent shipments.
+  defectRate: number; // 0..1
+  // ± days variance against the supplier's stated lead time.
+  leadTimeVarianceDays: number;
+  // Units the manufacturer can still take in their current production window.
+  capacityRemainingUnits: number;
+  // === Planning context ===
+  // Buying / drop window — when this item is intended to land in stores.
+  buyingWindow: { season: string; closeDate: string };
+  // Why this item surfaced — one or more demand signals with provenance.
+  trendSignals: TrendSignal[];
+}
+
+export interface LandedCost {
+  fob: number;
+  freight: number;
+  duty: number;
+  inspectionPerUnit: number;
+  unitLanded: number;
+  // Multiplier vs FOB so the planner can see the upcharge at a glance.
+  uplift: number;
+}
+
+export function landedCostFor(item: MarketplaceItem, qty: number): LandedCost {
+  const fob = item.unitPrice;
+  const freight = item.freightUnitCost;
+  const duty = fob * item.dutyRate;
+  const inspectionPerUnit = qty > 0 ? item.inspectionFee / qty : 0;
+  const unitLanded = fob + freight + duty + inspectionPerUnit;
+  return {
+    fob,
+    freight,
+    duty,
+    inspectionPerUnit,
+    unitLanded: Math.round(unitLanded * 100) / 100,
+    uplift: fob > 0 ? Math.round((unitLanded / fob) * 100) / 100 : 1,
+  };
 }
 
 const PRODUCT_IMAGE_COUNT = 30;
@@ -31,7 +95,196 @@ export const marketplaceManufacturers = [
   "Ironwood Workwear",
 ];
 
-export const marketplaceItems: MarketplaceItem[] = [
+// Per-manufacturer scorecard. In a real system these would come from
+// shipment / receipts data. Using a fixed table keeps every item from a
+// given supplier consistent.
+const SUPPLIER_SCORECARD: Record<
+  string,
+  {
+    countryOfOrigin: string;
+    paymentTerms: string;
+    onTimeDeliveryRate: number;
+    defectRate: number;
+    leadTimeVarianceDays: number;
+    dutyRate: number;
+    freightUplift: number; // freight $/unit added on top of FOB
+  }
+> = {
+  "Atlas & Bloom": {
+    countryOfOrigin: "Portugal",
+    paymentTerms: "Net 45",
+    onTimeDeliveryRate: 0.94,
+    defectRate: 0.012,
+    leadTimeVarianceDays: 3,
+    dutyRate: 0.12,
+    freightUplift: 4.5,
+  },
+  "Stitchcraft Co.": {
+    countryOfOrigin: "Italy",
+    paymentTerms: "30% deposit + 70% balance",
+    onTimeDeliveryRate: 0.88,
+    defectRate: 0.018,
+    leadTimeVarianceDays: 5,
+    dutyRate: 0.14,
+    freightUplift: 5.0,
+  },
+  "Northwind Apparel": {
+    countryOfOrigin: "Vietnam",
+    paymentTerms: "Net 30",
+    onTimeDeliveryRate: 0.91,
+    defectRate: 0.022,
+    leadTimeVarianceDays: 4,
+    dutyRate: 0.16,
+    freightUplift: 3.0,
+  },
+  "Meridian Textiles": {
+    countryOfOrigin: "Turkey",
+    paymentTerms: "Net 30",
+    onTimeDeliveryRate: 0.96,
+    defectRate: 0.009,
+    leadTimeVarianceDays: 2,
+    dutyRate: 0.13,
+    freightUplift: 3.5,
+  },
+  "Sundial Brands": {
+    countryOfOrigin: "India",
+    paymentTerms: "LC at sight",
+    onTimeDeliveryRate: 0.83,
+    defectRate: 0.031,
+    leadTimeVarianceDays: 9,
+    dutyRate: 0.18,
+    freightUplift: 2.5,
+  },
+  "Loomwell Studio": {
+    countryOfOrigin: "Spain",
+    paymentTerms: "Net 60",
+    onTimeDeliveryRate: 0.92,
+    defectRate: 0.014,
+    leadTimeVarianceDays: 4,
+    dutyRate: 0.12,
+    freightUplift: 4.0,
+  },
+  "Cedar Lane Goods": {
+    countryOfOrigin: "USA",
+    paymentTerms: "Net 30",
+    onTimeDeliveryRate: 0.97,
+    defectRate: 0.008,
+    leadTimeVarianceDays: 1,
+    dutyRate: 0.0,
+    freightUplift: 1.5,
+  },
+  "Ironwood Workwear": {
+    countryOfOrigin: "Mexico",
+    paymentTerms: "Net 45",
+    onTimeDeliveryRate: 0.9,
+    defectRate: 0.016,
+    leadTimeVarianceDays: 3,
+    dutyRate: 0.0,
+    freightUplift: 2.0,
+  },
+};
+
+// Trend signal generator — surfaces *why* an item appears trending/new/etc.
+// instead of just showing a label. Deterministic per item id.
+function trendSignalsFor(item: { id: string; tags: string[]; category: string }): TrendSignal[] {
+  const seed = parseInt(item.id.replace(/[^0-9]/g, "")) || 0;
+  const out: TrendSignal[] = [];
+  if (item.tags.includes("trending")) {
+    out.push({
+      kind: "search",
+      label: `${item.category} search interest`,
+      deltaPct: 18 + (seed % 22),
+    });
+    out.push({
+      kind: "social",
+      label: "TikTok mentions (last 7d)",
+      deltaPct: 35 + (seed % 60),
+    });
+  }
+  if (item.tags.includes("bestseller")) {
+    out.push({
+      kind: "sell-through",
+      label: "Peer brand sell-through",
+      deltaPct: 12 + (seed % 18),
+    });
+  }
+  if (item.tags.includes("new")) {
+    out.push({
+      kind: "campaign",
+      label: "Spring drop launch window",
+    });
+  }
+  if (item.category === "Outerwear") {
+    out.push({
+      kind: "weather",
+      label: "Cold front forecast NE region",
+      deltaPct: 8 + (seed % 14),
+    });
+  }
+  if (out.length === 0) {
+    out.push({
+      kind: "peer-brand",
+      label: "Steady demand baseline",
+    });
+  }
+  return out;
+}
+
+const SEASONS: { season: string; closeDate: string }[] = [
+  { season: "SS27", closeDate: "2026-08-15" },
+  { season: "FW27", closeDate: "2026-11-30" },
+  { season: "Carryover", closeDate: "2027-02-28" },
+];
+
+type RawItem = Omit<
+  MarketplaceItem,
+  | "freightUnitCost"
+  | "dutyRate"
+  | "inspectionFee"
+  | "countryOfOrigin"
+  | "paymentTerms"
+  | "onTimeDeliveryRate"
+  | "defectRate"
+  | "leadTimeVarianceDays"
+  | "capacityRemainingUnits"
+  | "buyingWindow"
+  | "trendSignals"
+>;
+
+function enrich(raw: RawItem, idx: number): MarketplaceItem {
+  const card = SUPPLIER_SCORECARD[raw.manufacturer] ?? {
+    countryOfOrigin: "—",
+    paymentTerms: "Net 30",
+    onTimeDeliveryRate: 0.9,
+    defectRate: 0.02,
+    leadTimeVarianceDays: 4,
+    dutyRate: 0.12,
+    freightUplift: 3.5,
+  };
+  const seed = parseInt(raw.id.replace(/[^0-9]/g, "")) || idx;
+  // Capacity declines for popular items, fuller for slow movers
+  const capacityRemainingUnits = raw.tags.includes("bestseller")
+    ? 800 + (seed % 600)
+    : 2400 + (seed % 1800);
+  // Inspection fee is a flat ~$200-$400 per shipment regardless of qty
+  const inspectionFee = 220 + (seed % 200);
+  return {
+    ...raw,
+    freightUnitCost: card.freightUplift,
+    dutyRate: card.dutyRate,
+    inspectionFee,
+    countryOfOrigin: card.countryOfOrigin,
+    paymentTerms: card.paymentTerms,
+    onTimeDeliveryRate: card.onTimeDeliveryRate,
+    defectRate: card.defectRate,
+    leadTimeVarianceDays: card.leadTimeVarianceDays,
+    capacityRemainingUnits,
+    buyingWindow: SEASONS[idx % SEASONS.length],
+    trendSignals: trendSignalsFor(raw),
+  };
+}
+
+const baseMarketplaceItems: RawItem[] = [
   { id: "MK-1001", productName: "Quilted Field Jacket", manufacturer: "Atlas & Bloom", category: "Outerwear", description: "Waxed cotton shell with Sherpa lining. Heritage workwear silhouette.", unitPrice: 68.5, moq: 24, leadTimeDays: 18, rating: 4.7, ratingCount: 142, inStock: true, imageUrl: img(1), tags: ["bestseller"] },
   { id: "MK-1002", productName: "Cropped Bomber", manufacturer: "Northwind Apparel", category: "Outerwear", description: "Lightweight nylon with rib trim. Trending for spring drops.", unitPrice: 42.0, moq: 36, leadTimeDays: 14, rating: 4.4, ratingCount: 88, inStock: true, imageUrl: img(2), tags: ["trending"] },
   { id: "MK-1003", productName: "Linen Camp Shirt", manufacturer: "Sundial Brands", category: "Tops", description: "Garment-washed linen, oversized fit. Ships in five colorways.", unitPrice: 18.5, moq: 60, leadTimeDays: 10, rating: 4.6, ratingCount: 211, inStock: true, imageUrl: img(3), tags: ["new"] },
@@ -63,3 +316,7 @@ export const marketplaceItems: MarketplaceItem[] = [
   { id: "MK-1029", productName: "Cargo Short", manufacturer: "Ironwood Workwear", category: "Bottoms", description: "Ripstop cotton, six-pocket utility. Modern fit.", unitPrice: 24.0, moq: 48, leadTimeDays: 14, rating: 4.4, ratingCount: 102, inStock: true, imageUrl: img(29), tags: [] },
   { id: "MK-1030", productName: "Strappy Sandal", manufacturer: "Sundial Brands", category: "Footwear", description: "Italian leather, block heel. Sizes 5-11.", unitPrice: 42.0, moq: 18, leadTimeDays: 28, rating: 4.5, ratingCount: 67, inStock: true, imageUrl: img(30), tags: ["new"] },
 ];
+
+export const marketplaceItems: MarketplaceItem[] = baseMarketplaceItems.map(
+  (item, idx) => enrich(item, idx)
+);

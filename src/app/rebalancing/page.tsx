@@ -68,7 +68,7 @@ export default function RebalancingPage() {
       storeIds: selectedStores.map((s) => s.id),
       storeNames: selectedStores.map((s) => s.name),
       categories: config.categories,
-      status: "Ready",
+      status: "Ready to Send",
       createdDate: new Date().toISOString().split("T")[0],
       skuCount: suggestions.length,
       totalValue: 0,
@@ -92,7 +92,7 @@ export default function RebalancingPage() {
             <Badge variant="secondary">{actions.length}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Move existing inventory between stores — shift stock from lower-demand locations to higher-demand ones, no new purchase order needed.
+            Move existing inventory between stores — shift stock from lower-demand locations to higher-demand ones.
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
@@ -109,7 +109,7 @@ export default function RebalancingPage() {
           icon: ShuffleIcon,
           title: "No rebalances yet",
           description:
-            "Shift existing inventory store-to-store, from lower-demand locations to higher-demand ones — no warehouse hop, no purchase order.",
+            "Shift existing inventory store-to-store, from lower-demand locations to higher-demand ones.",
           actionLabel: "Create rebalance",
           onAction: () => setModalOpen(true),
         }}

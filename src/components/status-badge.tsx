@@ -16,11 +16,11 @@ const actionStatusConfig: Record<
   InventoryAction["status"],
   { variant: BadgeVariant }
 > = {
-  Draft: { variant: "outline" },
+  Suggested: { variant: "outline" },
+  "Ready to Send": { variant: "warning" },
+  "Sent to Provider": { variant: "info" },
   Processing: { variant: "info" },
-  Ready: { variant: "success" },
-  Approved: { variant: "success" },
-  Completed: { variant: "secondary" },
+  Completed: { variant: "success" },
 };
 
 export function StatusBadge({ status }: { status: InventoryAction["status"] }) {

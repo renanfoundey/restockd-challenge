@@ -435,21 +435,19 @@ const URGENCY_CYCLE: ReorderRecommendation["urgency"][] = [
   "Low",
 ];
 
-// Cycle availability across the catalog so a typical reorder includes a mix
-// of "ready to ship today" (drawn from warehouse) and "wait for production"
-// (gated on a new PO). Distribution targets ~45/20/20/15 — most lines should
-// be coverable from existing stock; a meaningful tail needs new procurement.
+// Distribution targets ~60/25/15 — most reorder lines ship from warehouse
+// stock today; the rest are gated on an in-flight replenishment.
 const AVAILABILITY_CYCLE: ReorderAvailability[] = [
   "in_warehouse",
   "in_warehouse",
   "in_warehouse",
   "in_warehouse",
+  "in_warehouse",
+  "in_warehouse",
+  "in_transit",
   "in_transit",
   "in_transit",
   "in_production",
-  "in_production",
-  "needs_po",
-  "needs_po",
 ];
 
 const productionStatusFor = (
@@ -460,15 +458,16 @@ const productionStatusFor = (
     case "in_warehouse":
       return { wait: 0, status: undefined };
     case "in_transit":
-      return { wait: Math.max(2, Math.round(supplierLeadTime * 0.3)), status: "PO in transit" };
+      return {
+        wait: Math.max(2, Math.round(supplierLeadTime * 0.3)),
+        status: "Inbound from active replenishment",
+      };
     case "in_production":
+    default:
       return {
         wait: Math.max(5, Math.round(supplierLeadTime * 0.7)),
-        status: "Manufacturing in progress",
+        status: "Manufacturing on existing replenishment",
       };
-    case "needs_po":
-    default:
-      return { wait: supplierLeadTime + 7, status: "New PO required" };
   }
 };
 
@@ -506,7 +505,10 @@ export const recommendations: ReorderRecommendation[] = Array.from(
     baseRecommendations.map((r, idx): ReorderRecommendation => {
       if (i === 0) return enrich(r, idx);
       const seed = (idx + i * 7) % 11;
-      const qtyMul = 0.55 + (seed / 11) * 1.1;
+      // Per-line qty around 0.2-0.5 of base so a typical reorder action
+      // totals $100K-$500K — the realistic range for an apparel brand at
+      // this scale (and what an inventory manager actually plans against).
+      const qtyMul = 0.2 + (seed / 11) * 0.3;
       const sup = suppliers.find((s) => s.id === r.supplierId);
       const moq = sup?.moq ?? 0;
       let recommendedQty = Math.max(20, Math.round(r.recommendedQty * qtyMul));

@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/table";
 import { TopDrivers } from "@/components/top-drivers";
 import { usePaginated, PaginatorControls } from "@/components/paginator";
+import { SkuLineStatusBadge } from "@/components/action-line-status";
+import { SendToIntegration } from "@/components/send-to-integration";
 import { reorderActions } from "@/data/reorder-actions";
 import { getItems } from "@/lib/storage";
 import { splitVariant } from "@/lib/utils";
@@ -88,7 +90,8 @@ export default function ReorderDetailPage() {
             Created {action.createdDate}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <SendToIntegration actionName={action.name} noun="reorder" />
           <Button variant="outline" size="sm" onClick={handleShare}>
             <ShareIcon />
             {copied ? "Copied!" : "Share"}
@@ -127,7 +130,10 @@ export default function ReorderDetailPage() {
         description={`Top SKUs by estimated cost across ${action.recommendations.length} recommendations.`}
       />
 
-      <RecommendationsTable recommendations={action.recommendations} />
+      <RecommendationsTable
+        recommendations={action.recommendations}
+        actionStatus={action.status}
+      />
     </div>
   );
 }
@@ -181,28 +187,28 @@ function ReorderReasoning({ action }: { action: ReorderAction }) {
             </h3>
           </div>
           <p className="text-sm text-foreground leading-relaxed">
-            Reordering ships inventory from the warehouse to the store for
-            individual SKUs the forecast model flagged below their reorder
-            point ({highUrgency} marked High urgency). Of{" "}
+            The forecast model flagged{" "}
             <strong className="font-semibold tabular-nums">
               {action.recommendations.length.toLocaleString()}
             </strong>{" "}
-            recommended SKUs,{" "}
+            SKUs in {action.warehouseName} below their reorder point —{" "}
+            {highUrgency} marked High urgency.{" "}
             <strong className="font-semibold tabular-nums">{readyNow}</strong>{" "}
-            can ship from warehouse stock today; the remaining{" "}
+            can ship to {action.storeName} from warehouse stock today; the
+            remaining{" "}
             <strong className="font-semibold tabular-nums">{gated}</strong> are
-            gated by purchasing or production from{" "}
+            gated by procurement or production from{" "}
             {distinctSuppliers.size} manufacturer
             {distinctSuppliers.size === 1 ? "" : "s"}. Cost outlay{" "}
             <strong className="font-semibold tabular-nums">
               ${action.totalValue.toLocaleString()}
             </strong>{" "}
-            against projected 30-day revenue of{" "}
+            should generate{" "}
             <strong className="font-semibold tabular-nums">
               ${Math.round(projectedRevenue).toLocaleString()}
             </strong>{" "}
-            (assuming {Math.round(SELL_THROUGH * 100)}% sell-through at{" "}
-            {MARKUP.toFixed(1)}× markup), for a projected gross profit of{" "}
+            in 30-day revenue at {Math.round(SELL_THROUGH * 100)}% sell-through
+            and a {MARKUP.toFixed(1)}× markup, for a projected gross profit of{" "}
             <strong className="font-semibold tabular-nums text-success-foreground">
               ${Math.round(projectedProfit).toLocaleString()}
             </strong>
@@ -216,8 +222,10 @@ function ReorderReasoning({ action }: { action: ReorderAction }) {
 
 function RecommendationsTable({
   recommendations,
+  actionStatus,
 }: {
   recommendations: ReorderAction["recommendations"];
+  actionStatus: ReorderAction["status"];
 }) {
   const pager = usePaginated(recommendations, 25);
   return (
@@ -246,6 +254,7 @@ function RecommendationsTable({
               <TableHead className="hidden xl:table-cell">Supplier</TableHead>
               <TableHead className="text-right hidden lg:table-cell">Est. Cost</TableHead>
               <TableHead>Urgency</TableHead>
+              <TableHead>Status</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -306,6 +315,13 @@ function RecommendationsTable({
                       {rec.urgency}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    <SkuLineStatusBadge
+                      status={actionStatus}
+                      flow="reorder"
+                      idx={idx}
+                    />
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -329,8 +345,8 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 }
 
 function AvailabilityBadge({ rec }: { rec: ReorderRecommendation }) {
-  // Per-SKU sourcing summary: where the units come from and how long the
-  // gated portion will take.
+  // Per-SKU sourcing summary: where the units come from and how long any
+  // gated portion will take to land at the warehouse.
   if (rec.availability === "in_warehouse") {
     return (
       <div className="space-y-0.5 max-w-[200px]">
@@ -342,18 +358,9 @@ function AvailabilityBadge({ rec }: { rec: ReorderRecommendation }) {
       </div>
     );
   }
-  const variant =
-    rec.availability === "in_transit"
-      ? "info"
-      : rec.availability === "in_production"
-      ? "warning"
-      : "destructive";
+  const variant = rec.availability === "in_transit" ? "info" : "warning";
   const label =
-    rec.availability === "in_transit"
-      ? "In transit"
-      : rec.availability === "in_production"
-      ? "In production"
-      : "Needs PO";
+    rec.availability === "in_transit" ? "In transit" : "In production";
   const coverage =
     rec.warehouseStockOnHand > 0
       ? `${rec.warehouseStockOnHand.toLocaleString()} / ${rec.recommendedQty.toLocaleString()} on hand`

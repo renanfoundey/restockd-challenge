@@ -75,12 +75,12 @@ export function TopDrivers({
         )}
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {top.map((item) => {
+        {top.map((item, idx) => {
           const sku = resolveInventorySku(item);
           const share = totalValue > 0 ? (item.value / totalValue) * 100 : 0;
           return (
             <DriverCard
-              key={item.skuId}
+              key={`${item.skuId}-${idx}`}
               linkSkuId={sku?.id ?? item.skuId}
               displaySkuId={item.skuId}
               productName={item.productName}
