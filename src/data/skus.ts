@@ -43,7 +43,7 @@ function sku(
   };
 }
 
-export const skus: SKU[] = [
+const baseSkus: SKU[] = [
   // ─── Outerwear (15 SKUs) ──────────────────────────────────────────
   sku("AJ-BLK-M", "Alpine Jacket", "Black / M", "Outerwear", 340, 18, 89.0, 10, "SUP-001", "Eastway Textiles", 1),
   sku("AJ-BLK-L", "Alpine Jacket", "Black / L", "Outerwear", 290, 22, 89.0, 10, "SUP-001", "Eastway Textiles", 2),
@@ -180,3 +180,33 @@ export const skus: SKU[] = [
   sku("DJ-BLU-M", "Denim Trucker Jacket", "Blue / M", "Denim", 240, 9, 75.0, 9, "SUP-008", "Urban Thread Group", 119),
   sku("DJ-BLK-L", "Denim Trucker Jacket", "Black / L", "Denim", 28, 8, 75.0, 9, "SUP-008", "Urban Thread Group", 120),
 ];
+
+// Multiply the catalog ~4x to better reflect a realistic warehouse footprint
+// (target ~480 SKUs). We vary stock and sales deterministically per copy so
+// status mix stays interesting.
+const COPIES = 4;
+const COPY_LABELS = ["", "B", "C", "D"];
+
+function deriveCopy(base: SKU, copyIndex: number): SKU {
+  if (copyIndex === 0) return base;
+  const seed = (base.id.charCodeAt(0) + copyIndex * 13) % 100;
+  const stockMultiplier = 0.4 + (seed / 100) * 1.2;
+  const salesMultiplier = 0.7 + ((seed * 3) % 60) / 100;
+  const currentStock = Math.max(0, Math.round(base.currentStock * stockMultiplier));
+  const avgDailySales = Math.max(1, Math.round(base.avgDailySales * salesMultiplier));
+  const daysOfSupply =
+    avgDailySales === 0 ? 0 : Math.floor(currentStock / avgDailySales);
+  return {
+    ...base,
+    id: `${base.id}-${COPY_LABELS[copyIndex]}`,
+    currentStock,
+    avgDailySales,
+    daysOfSupply,
+    reorderPoint: Math.round(avgDailySales * base.leadTimeDays * 1.5),
+    status: computeStatus(daysOfSupply),
+  };
+}
+
+export const skus: SKU[] = Array.from({ length: COPIES }, (_, i) =>
+  baseSkus.map((s) => deriveCopy(s, i))
+).flat();

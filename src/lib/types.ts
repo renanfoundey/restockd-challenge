@@ -42,14 +42,6 @@ export interface PurchaseOrder {
   totalCost: number;
 }
 
-export interface POLineItem {
-  skuId: string;
-  productName: string;
-  quantity: number;
-  unitCost: number;
-  lineTotal: number;
-}
-
 export interface ReorderRecommendation {
   skuId: string;
   productName: string;
@@ -69,10 +61,28 @@ export interface RebalancingSuggestion {
   skuId: string;
   productName: string;
   variant: string;
-  fromWarehouse: string;
-  toWarehouse: string;
+  // Rebalancing moves existing inventory between STORES (lower-demand →
+  // higher-demand), not between warehouses. Field names previously mentioned
+  // "Warehouse" — we keep that here for backwards-compat with the storage key
+  // but populate them with store identifiers.
+  fromStore: string;
+  toStore: string;
   suggestedQty: number;
   reason: string;
+}
+
+export interface POLineItem {
+  skuId: string;
+  productName: string;
+  quantity: number;
+  unitCost: number;
+  lineTotal: number;
+  // Replenishment distributes a single supplier order across multiple
+  // destination warehouses + stores. These override the action-level defaults.
+  destinationWarehouseId?: string;
+  destinationWarehouseName?: string;
+  destinationStoreId?: string;
+  destinationStoreName?: string;
 }
 
 export interface ReorderRequest {

@@ -1,6 +1,7 @@
 import { ReorderRecommendation } from "@/lib/types";
+import { suppliers } from "./suppliers";
 
-export const recommendations: ReorderRecommendation[] = [
+const baseRecommendations: ReorderRecommendation[] = [
   {
     skuId: "SKU-1005",
     productName: "Alpine Puffer Jacket",
@@ -280,11 +281,12 @@ export const recommendations: ReorderRecommendation[] = [
     variant: "Navy / 34",
     currentStock: 110,
     forecastedDemand30d: 220,
-    recommendedQty: 400,
+    // Rounded up to Urban Thread Group MOQ of 500 (audit fix; was 400)
+    recommendedQty: 500,
     reason: "Transitional wardrobe essential with steady demand. Stock covers 15 days; reorder to maintain buffer.",
     supplierName: "Urban Thread Group",
     supplierId: "SUP-008",
-    estimatedCost: 7400.0,
+    estimatedCost: 9250.0,
     urgency: "Low",
   },
   {
@@ -392,3 +394,54 @@ export const recommendations: ReorderRecommendation[] = [
     urgency: "Medium",
   },
 ];
+
+// Multiply the recommendation pool so detail pages can show hundreds of
+// line items per action. Variants tweak quantities, stock, and urgency
+// deterministically and always respect supplier MOQ.
+const REC_COPIES = 12;
+const REC_LABELS = [
+  "",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "J",
+  "K",
+  "L",
+  "M",
+];
+const URGENCY_CYCLE: ReorderRecommendation["urgency"][] = [
+  "High",
+  "Medium",
+  "Low",
+];
+
+export const recommendations: ReorderRecommendation[] = Array.from(
+  { length: REC_COPIES },
+  (_, i) =>
+    baseRecommendations.map((r, idx) => {
+      if (i === 0) return r;
+      const seed = (idx + i * 7) % 11;
+      const qtyMul = 0.55 + (seed / 11) * 1.1;
+      const sup = suppliers.find((s) => s.id === r.supplierId);
+      const moq = sup?.moq ?? 0;
+      let recommendedQty = Math.max(20, Math.round(r.recommendedQty * qtyMul));
+      // Recommendations must always respect supplier MOQ
+      if (moq > 0 && recommendedQty < moq) recommendedQty = moq;
+      const unitCost = r.estimatedCost / Math.max(1, r.recommendedQty);
+      return {
+        ...r,
+        skuId: `${r.skuId}-${REC_LABELS[i]}`,
+        currentStock: Math.max(0, Math.round(r.currentStock * (0.4 + seed / 22))),
+        forecastedDemand30d: Math.round(
+          r.forecastedDemand30d * (0.7 + seed / 18)
+        ),
+        recommendedQty,
+        estimatedCost: Math.round(unitCost * recommendedQty * 100) / 100,
+        urgency: URGENCY_CYCLE[(idx + i) % URGENCY_CYCLE.length],
+      };
+    })
+).flat();

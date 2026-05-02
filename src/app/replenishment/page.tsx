@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ActionListTable } from "@/components/action-list-table";
 import { CreationModal } from "@/components/creation-modal";
 import { purchaseOrderActions as seedActions } from "@/data/purchase-order-actions";
@@ -9,11 +10,12 @@ import { recommendations } from "@/data/recommendations";
 import { warehouses } from "@/data/warehouses";
 import { stores } from "@/data/stores";
 import { suppliers } from "@/data/suppliers";
-import { getItems, addItem } from "@/lib/storage";
+import { getItems, addItem, removeItem } from "@/lib/storage";
 import { toast } from "sonner";
+import { PlusIcon, TruckIcon } from "lucide-react";
 import type { PurchaseOrderAction } from "@/lib/types";
 
-export default function PurchaseOrdersPage() {
+export default function ReplenishmentPage() {
   const [actions, setActions] = useState<PurchaseOrderAction[]>(seedActions);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -69,29 +71,52 @@ export default function PurchaseOrdersPage() {
 
     setActions((prev) => [newAction, ...prev]);
     addItem("restockd_purchase_orders", newAction);
-    toast.success("Purchase order created");
+    toast.success("Replenishment created");
     return id;
   };
 
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-lg font-semibold">Purchase Orders</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">
+              Replenishment
+            </h1>
+            <Badge variant="secondary">{actions.length}</Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Create and manage purchase orders
+            Keep the network stocked. Each plan covers what you need to bring in next, where it should land, and which stores it's serving — so you spend less time chasing PO statuses and more time on what to merchandise next.
           </p>
         </div>
-        <Button onClick={() => setModalOpen(true)}>+ New Purchase Order</Button>
+        <Button onClick={() => setModalOpen(true)}>
+          <PlusIcon /> New Replenishment
+        </Button>
       </div>
 
-      <ActionListTable items={actions} basePath="/purchase-orders" />
+      <ActionListTable
+        items={actions}
+        basePath="/replenishment"
+        emptyState={{
+          icon: TruckIcon,
+          title: "No replenishments yet",
+          description:
+            "Turn flagged SKUs into supplier-ready orders with quantities and lead times pre-filled.",
+          actionLabel: "Create replenishment",
+          onAction: () => setModalOpen(true),
+        }}
+        onRemove={(item) => {
+          setActions((prev) => prev.filter((a) => a.id !== item.id));
+          removeItem<PurchaseOrderAction>("restockd_purchase_orders", item.id);
+          toast.success(`${item.name} removed`);
+        }}
+      />
 
       <CreationModal
         open={modalOpen}
         onOpenChange={setModalOpen}
-        entityType="Purchase Order"
-        basePath="/purchase-orders"
+        entityType="Replenishment"
+        basePath="/replenishment"
         onComplete={handleCreate}
       />
     </div>

@@ -1,5 +1,15 @@
-import type { ReorderAction } from "@/lib/types";
+import type { ReorderAction, ReorderRecommendation } from "@/lib/types";
 import { recommendations } from "./recommendations";
+
+// With the 12x recommendation pool (~360 items), large slices give each
+// action a realistic, hundreds-of-items workload that requires pagination.
+const recsRA1 = recommendations.slice(0, 180);
+const recsRA2 = recommendations.slice(40, 220);
+const recsRA3 = recommendations.slice(80, 240);
+const recsRA4 = recommendations.slice(120, 340);
+
+const sumCost = (recs: ReorderRecommendation[]) =>
+  Math.round(recs.reduce((s, r) => s + r.estimatedCost, 0));
 
 export const reorderActions: ReorderAction[] = [
   {
@@ -13,9 +23,9 @@ export const reorderActions: ReorderAction[] = [
     categories: ["Tops", "Dresses", "Accessories"],
     status: "Completed",
     createdDate: "2026-02-15",
-    skuCount: 8,
-    totalValue: 42750,
-    recommendations: recommendations.slice(0, 8),
+    skuCount: recsRA1.length,
+    totalValue: sumCost(recsRA1),
+    recommendations: recsRA1,
   },
   {
     id: "RA-002",
@@ -28,9 +38,9 @@ export const reorderActions: ReorderAction[] = [
     categories: ["Activewear"],
     status: "Approved",
     createdDate: "2026-03-20",
-    skuCount: 6,
-    totalValue: 37650,
-    recommendations: recommendations.slice(4, 10),
+    skuCount: recsRA2.length,
+    totalValue: sumCost(recsRA2),
+    recommendations: recsRA2,
   },
   {
     id: "RA-003",
@@ -43,9 +53,9 @@ export const reorderActions: ReorderAction[] = [
     categories: ["Denim", "Bottoms"],
     status: "Ready",
     createdDate: "2026-04-01",
-    skuCount: 5,
-    totalValue: 31525,
-    recommendations: recommendations.slice(6, 11),
+    skuCount: recsRA3.length,
+    totalValue: sumCost(recsRA3),
+    recommendations: recsRA3,
   },
   {
     id: "RA-004",
@@ -58,8 +68,8 @@ export const reorderActions: ReorderAction[] = [
     categories: ["Tops", "Outerwear", "Footwear"],
     status: "Draft",
     createdDate: "2026-04-07",
-    skuCount: 10,
-    totalValue: 58200,
-    recommendations: recommendations.slice(10, 20),
+    skuCount: recsRA4.length,
+    totalValue: sumCost(recsRA4),
+    recommendations: recsRA4,
   },
 ];

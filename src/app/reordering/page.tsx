@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ActionListTable } from "@/components/action-list-table";
 import { CreationModal } from "@/components/creation-modal";
 import { reorderActions as seedActions } from "@/data/reorder-actions";
 import { recommendations } from "@/data/recommendations";
 import { warehouses } from "@/data/warehouses";
 import { stores } from "@/data/stores";
-import { getItems, addItem } from "@/lib/storage";
+import { getItems, addItem, removeItem } from "@/lib/storage";
 import { toast } from "sonner";
+import { PlusIcon, RotateCcwIcon } from "lucide-react";
 import type { ReorderAction } from "@/lib/types";
 
 export default function ReorderingPage() {
@@ -65,18 +67,43 @@ export default function ReorderingPage() {
   };
 
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Reordering</h1>
-          <p className="text-sm text-muted-foreground">
-            AI-powered reorder recommendations
-          </p>
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight">
+                Reordering
+              </h1>
+              <Badge variant="secondary">{actions.length}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Targeted reorders for individual SKUs flagged by the forecast model. Routes new stock from supplier through your warehouse to a single store.
+            </p>
+          </div>
         </div>
-        <Button onClick={() => setModalOpen(true)}>+ New Reorder</Button>
+        <Button onClick={() => setModalOpen(true)}>
+          <PlusIcon /> New Reorder
+        </Button>
       </div>
 
-      <ActionListTable items={actions} basePath="/reordering" />
+      <ActionListTable
+        items={actions}
+        basePath="/reordering"
+        emptyState={{
+          icon: RotateCcwIcon,
+          title: "No reorders yet",
+          description:
+            "Create a reorder to act on AI-flagged low-stock SKUs and lock in supplier coverage.",
+          actionLabel: "Create reorder",
+          onAction: () => setModalOpen(true),
+        }}
+        onRemove={(item) => {
+          setActions((prev) => prev.filter((a) => a.id !== item.id));
+          removeItem<ReorderAction>("restockd_reorders", item.id);
+          toast.success(`${item.name} removed`);
+        }}
+      />
 
       <CreationModal
         open={modalOpen}

@@ -9,9 +9,10 @@ import { suppliers } from "@/data/suppliers";
 import { recommendations } from "@/data/recommendations";
 import { rebalancingSuggestions } from "@/data/rebalancing";
 import { purchaseOrderActions } from "@/data/purchase-order-actions";
-import { generateStockHistory } from "@/data/stock-history";
+import { generateStockHistory, deriveForecastInsight } from "@/data/stock-history";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SkuStatusBadge } from "@/components/status-badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
@@ -30,10 +31,6 @@ import {
   MailIcon,
 } from "lucide-react";
 
-const AreaChart = dynamic(
-  () => import("recharts").then((m) => m.AreaChart),
-  { ssr: false }
-);
 const Area = dynamic(
   () => import("recharts").then((m) => m.Area),
   { ssr: false }
@@ -54,12 +51,24 @@ const Tooltip = dynamic(
   () => import("recharts").then((m) => m.Tooltip),
   { ssr: false }
 );
+const Line = dynamic(
+  () => import("recharts").then((m) => m.Line),
+  { ssr: false }
+);
+const ComposedChart = dynamic(
+  () => import("recharts").then((m) => m.ComposedChart),
+  { ssr: false }
+);
 const ResponsiveContainer = dynamic(
   () => import("recharts").then((m) => m.ResponsiveContainer),
   { ssr: false }
 );
 const ReferenceLine = dynamic(
   () => import("recharts").then((m) => m.ReferenceLine),
+  { ssr: false }
+);
+const ReferenceDot = dynamic(
+  () => import("recharts").then((m) => m.ReferenceDot),
   { ssr: false }
 );
 
@@ -87,6 +96,13 @@ export default function SkuDetailPage() {
     () => (sku ? generateStockHistory(sku) : []),
     [sku]
   );
+
+  const insight = useMemo(
+    () => (sku ? deriveForecastInsight(sku) : null),
+    [sku]
+  );
+
+  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   const relatedPOs = useMemo(() => {
     if (!sku) return [];
@@ -120,7 +136,7 @@ export default function SkuDetailPage() {
       <div className="p-6">
         <Link href="/skus">
           <Button variant="outline" size="sm">
-            <ArrowLeftIcon className="h-4 w-4 mr-1" /> Back
+            <ArrowLeftIcon /> Back
           </Button>
         </Link>
         <p className="mt-4 text-sm text-muted-foreground">SKU not found.</p>
@@ -135,148 +151,245 @@ export default function SkuDetailPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Link href="/skus">
-          <Button variant="outline" size="sm">
-            <ArrowLeftIcon className="h-4 w-4 mr-1" /> Back
-          </Button>
-        </Link>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold">{sku.productName}</h1>
-          <p className="text-xs text-muted-foreground">
-            {sku.variant} &middot; <span className="font-mono">{sku.id}</span>
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <Link href="/skus" className="inline-block">
+        <Button variant="ghost" size="sm">
+          <ArrowLeftIcon /> Back to SKUs
+        </Button>
+      </Link>
+
+      <div className="flex items-start gap-4 flex-wrap">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {sku.productName}
+            </h1>
+            <SkuStatusBadge status={sku.status} />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {sku.variant} <span className="text-muted-foreground/50">·</span>{" "}
+            <span className="font-mono text-xs">{sku.id}</span>
           </p>
         </div>
-        <Badge
-          variant={
-            sku.status === "Out of Stock" || sku.status === "Critical"
-              ? "destructive"
-              : sku.status === "Low Stock"
-              ? "secondary"
-              : "outline"
-          }
-        >
-          {sku.status}
-        </Badge>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleShare}>
-            <ShareIcon className="h-4 w-4 mr-1" />
+            <ShareIcon />
             {copied ? "Copied!" : "Share"}
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <DownloadIcon className="h-4 w-4 mr-1" /> Download PDF
+            <DownloadIcon /> Download PDF
           </Button>
         </div>
       </div>
 
-      {/* Product + Metrics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
-          <img
-            src={sku.imageUrl}
-            alt={sku.productName}
-            className="w-full h-64 object-cover rounded-lg bg-muted"
-          />
+        <div className="lg:col-span-1 space-y-4">
+          <div className="rounded-xl overflow-hidden border border-border bg-card shadow-xs">
+            <img
+              src={sku.imageUrl}
+              alt={sku.productName}
+              className="w-full aspect-[4/5] object-cover bg-muted"
+            />
+          </div>
           {supplier && (
-            <div className="border border-border rounded-lg p-4 mt-4 space-y-2">
-              <h3 className="text-sm font-medium flex items-center gap-2">
-                <TruckIcon className="h-4 w-4 text-muted-foreground" />
+            <div className="rounded-xl border border-border bg-card p-4 shadow-xs space-y-3">
+              <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <TruckIcon className="size-3.5" />
                 Supplier
               </h3>
-              <p className="text-sm font-medium">{supplier.name}</p>
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <p className="text-sm font-semibold">{supplier.name}</p>
+              <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <p>MOQ</p>
-                  <p className="text-foreground font-medium">{supplier.moq} units</p>
+                  <p className="text-muted-foreground">MOQ</p>
+                  <p className="text-foreground font-medium tabular-nums">
+                    {supplier.moq} units
+                  </p>
                 </div>
                 <div>
-                  <p>Lead Time</p>
-                  <p className="text-foreground font-medium">{supplier.leadTimeDays} days</p>
+                  <p className="text-muted-foreground">Lead Time</p>
+                  <p className="text-foreground font-medium tabular-nums">
+                    {supplier.leadTimeDays} days
+                  </p>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <MailIcon className="h-3 w-3" /> {supplier.contactEmail}
-              </p>
+              <div className="flex items-center gap-1.5 pt-2 border-t border-border text-xs text-muted-foreground">
+                <MailIcon className="size-3" /> {supplier.contactEmail}
+              </div>
             </div>
           )}
         </div>
         <div className="lg:col-span-2 space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="border border-border rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Current Stock</p>
-              <p className="text-lg font-semibold">{sku.currentStock.toLocaleString()}</p>
-            </div>
-            <div className="border border-border rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Days of Supply</p>
-              <p className="text-lg font-semibold">{sku.daysOfSupply}</p>
-            </div>
-            <div className="border border-border rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Avg Daily Sales</p>
-              <p className="text-lg font-semibold">{sku.avgDailySales}</p>
-            </div>
-            <div className="border border-border rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Reorder Point</p>
-              <p className="text-lg font-semibold">{sku.reorderPoint}</p>
-            </div>
-            <div className="border border-border rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Unit Cost</p>
-              <p className="text-lg font-semibold">${sku.unitCost.toFixed(2)}</p>
-            </div>
-            <div className="border border-border rounded-lg p-3">
-              <p className="text-xs text-muted-foreground">Lead Time</p>
-              <p className="text-lg font-semibold">{sku.leadTimeDays} days</p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <HeroMetric
+              label="Current Stock"
+              value={sku.currentStock.toLocaleString()}
+              hint={`${sku.avgDailySales} units/day avg`}
+            />
+            <HeroMetric
+              label="Days of Supply"
+              value={String(sku.daysOfSupply)}
+              hint={`Reorder at ${sku.reorderPoint} units`}
+              accent={sku.daysOfSupply < 14}
+            />
           </div>
-          <div className="text-xs text-muted-foreground">
-            <Badge variant="secondary">{sku.category}</Badge>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <CompactMetric label="Avg / day" value={String(sku.avgDailySales)} />
+            <CompactMetric label="Reorder pt" value={String(sku.reorderPoint)} />
+            <CompactMetric
+              label="Unit cost"
+              value={`$${sku.unitCost.toFixed(2)}`}
+            />
+            <CompactMetric
+              label="Lead time"
+              value={`${sku.leadTimeDays}d`}
+            />
           </div>
 
-          {/* Stock Trend Chart */}
-          <div className="border border-border rounded-lg p-4">
-            <h3 className="text-sm font-medium mb-3">Stock Trend (90 days)</h3>
-            <div className="h-[250px]">
+          <div className="rounded-xl border border-border bg-card p-5 shadow-xs">
+            <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
+              <div>
+                <h3 className="text-sm font-semibold">Stock Outlook</h3>
+                <p className="text-xs text-muted-foreground">
+                  90 days actual + 30-day forecast
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] flex-wrap">
+                <LegendDot color="var(--color-chart-1)" label="Actual" />
+                <LegendDot color="var(--color-chart-1)" label="Forecast" dashed />
+                <LegendDot color="var(--color-destructive)" label="Reorder point" dashed />
+              </div>
+            </div>
+            <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={stockHistory}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <ComposedChart data={stockHistory} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="stockGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                    tickLine={false}
+                    axisLine={false}
                     tickFormatter={(v: string) => v.slice(5)}
+                    minTickGap={28}
                   />
-                  <YAxis tick={{ fontSize: 10 }} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
                   <Tooltip
-                    contentStyle={{ fontSize: 12 }}
+                    cursor={{ stroke: "var(--color-border)", strokeDasharray: "3 3" }}
+                    contentStyle={{
+                      backgroundColor: "var(--color-popover)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "10px",
+                      fontSize: 12,
+                      boxShadow: "var(--shadow-md)",
+                    }}
                     labelFormatter={(v) => `Date: ${v}`}
                   />
                   <ReferenceLine
                     y={sku.reorderPoint}
                     stroke="var(--color-destructive)"
                     strokeDasharray="4 4"
-                    label={{ value: "Reorder Point", fontSize: 10, fill: "var(--color-destructive)" }}
+                    label={{
+                      value: `Reorder: ${sku.reorderPoint}`,
+                      fontSize: 11,
+                      fill: "var(--color-destructive)",
+                      position: "right",
+                    }}
                   />
+                  <ReferenceLine
+                    x={todayStr}
+                    stroke="var(--color-muted-foreground)"
+                    strokeDasharray="2 4"
+                    label={{
+                      value: "Today",
+                      fontSize: 10,
+                      fill: "var(--color-muted-foreground)",
+                      position: "insideTopRight",
+                    }}
+                  />
+                  {insight?.reorderDate && (
+                    <ReferenceDot
+                      x={insight.reorderDate}
+                      y={sku.reorderPoint}
+                      r={5}
+                      fill="var(--color-destructive)"
+                      stroke="var(--color-card)"
+                      strokeWidth={2}
+                      label={{
+                        value: `Reorder ${insight.recommendedQty.toLocaleString()} units`,
+                        fontSize: 11,
+                        fill: "var(--color-destructive)",
+                        position: "top",
+                      }}
+                    />
+                  )}
                   <Area
                     type="monotone"
                     dataKey="stock"
                     stroke="var(--color-chart-1)"
-                    fill="var(--color-chart-1)"
-                    fillOpacity={0.15}
+                    fill="url(#stockGradient)"
                     strokeWidth={2}
+                    connectNulls={false}
+                    isAnimationActive={false}
                   />
-                </AreaChart>
+                  <Line
+                    type="monotone"
+                    dataKey="forecast"
+                    stroke="var(--color-chart-1)"
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    dot={false}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
+            {insight && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Days until reorder
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums mt-0.5">
+                    {insight.daysUntilReorder ?? "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Recommended qty
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums mt-0.5">
+                    {insight.recommendedQty.toLocaleString()} units
+                  </p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                    Order by
+                  </p>
+                  <p className="text-sm font-semibold mt-0.5">
+                    {insight.reorderDate ?? "—"}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Cross-Reference Tabs */}
       <Tabs defaultValue={0}>
         <TabsList variant="line">
           <TabsTrigger value={0}>
-            <PackageIcon className="h-4 w-4" />
-            Purchase Orders ({relatedPOs.length})
+            <PackageIcon />
+            Replenishment ({relatedPOs.length})
           </TabsTrigger>
           <TabsTrigger value={1}>
             Reorder Recommendations ({relatedRecs.length})
@@ -288,9 +401,9 @@ export default function SkuDetailPage() {
 
         <TabsContent value={0}>
           {relatedPOs.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">No related purchase orders found.</p>
+            <p className="text-sm text-muted-foreground py-6">No related replenishment orders found.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs mt-2">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -306,20 +419,20 @@ export default function SkuDetailPage() {
                     <TableRow key={po.id}>
                       <TableCell>
                         <Link
-                          href={`/purchase-orders/${po.id}`}
-                          className="font-medium hover:underline"
+                          href={`/replenishment/${po.id}`}
+                          className="font-medium text-foreground hover:text-primary transition-colors"
                         >
                           {po.name}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-xs">{po.supplierName}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{po.supplierName}</TableCell>
                       <TableCell>
                         <Badge variant={po.status === "Completed" ? "secondary" : "outline"}>
                           {po.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs">{po.createdDate}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-xs text-muted-foreground">{po.createdDate}</TableCell>
+                      <TableCell className="text-right tabular-nums">
                         ${po.totalValue.toLocaleString()}
                       </TableCell>
                     </TableRow>
@@ -332,9 +445,9 @@ export default function SkuDetailPage() {
 
         <TabsContent value={1}>
           {relatedRecs.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">No related reorder recommendations found.</p>
+            <p className="text-sm text-muted-foreground py-6">No related reorder recommendations found.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs mt-2">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -352,14 +465,18 @@ export default function SkuDetailPage() {
                     <TableRow key={`${rec.skuId}-${idx}`}>
                       <TableCell className="font-mono text-xs">{rec.skuId}</TableCell>
                       <TableCell>{rec.productName}</TableCell>
-                      <TableCell className="text-xs">{rec.variant}</TableCell>
-                      <TableCell className="text-right">{rec.currentStock}</TableCell>
-                      <TableCell className="text-right">{rec.forecastedDemand30d}</TableCell>
-                      <TableCell className="text-right">{rec.recommendedQty}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{rec.variant}</TableCell>
+                      <TableCell className="text-right tabular-nums">{rec.currentStock}</TableCell>
+                      <TableCell className="text-right tabular-nums">{rec.forecastedDemand30d}</TableCell>
+                      <TableCell className="text-right tabular-nums">{rec.recommendedQty}</TableCell>
                       <TableCell>
                         <Badge
                           variant={
-                            rec.urgency === "High" ? "destructive" : rec.urgency === "Medium" ? "secondary" : "outline"
+                            rec.urgency === "High"
+                              ? "destructive"
+                              : rec.urgency === "Medium"
+                              ? "warning"
+                              : "outline"
                           }
                         >
                           {rec.urgency}
@@ -375,14 +492,14 @@ export default function SkuDetailPage() {
 
         <TabsContent value={2}>
           {relatedRebalances.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">No related rebalancing suggestions found.</p>
+            <p className="text-sm text-muted-foreground py-6">No related rebalancing suggestions found.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="rounded-xl border border-border bg-card overflow-hidden shadow-xs mt-2">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>From Warehouse</TableHead>
-                    <TableHead>To Warehouse</TableHead>
+                    <TableHead>From Store</TableHead>
+                    <TableHead>To Store</TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Variant</TableHead>
                     <TableHead className="text-right">Suggested Qty</TableHead>
@@ -392,12 +509,12 @@ export default function SkuDetailPage() {
                 <TableBody>
                   {relatedRebalances.map((rb) => (
                     <TableRow key={rb.id}>
-                      <TableCell className="text-xs">{rb.fromWarehouse}</TableCell>
-                      <TableCell className="text-xs">{rb.toWarehouse}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{rb.fromStore}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{rb.toStore}</TableCell>
                       <TableCell>{rb.productName}</TableCell>
-                      <TableCell className="text-xs">{rb.variant}</TableCell>
-                      <TableCell className="text-right">{rb.suggestedQty}</TableCell>
-                      <TableCell className="text-xs max-w-sm">{rb.reason}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{rb.variant}</TableCell>
+                      <TableCell className="text-right tabular-nums">{rb.suggestedQty}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-sm whitespace-normal">{rb.reason}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -407,5 +524,76 @@ export default function SkuDetailPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function HeroMetric({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={
+        accent
+          ? "rounded-xl border border-warning/30 bg-warning-soft/40 p-4 shadow-xs"
+          : "rounded-xl border border-border bg-card p-4 shadow-xs"
+      }
+    >
+      <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        {label}
+      </p>
+      <p className="text-2xl font-semibold tracking-tight tabular-nums mt-1">
+        {value}
+      </p>
+      {hint && (
+        <p className="text-xs text-muted-foreground mt-1">{hint}</p>
+      )}
+    </div>
+  );
+}
+
+function CompactMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+        {label}
+      </p>
+      <p className="text-sm font-semibold tabular-nums mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function LegendDot({
+  color,
+  label,
+  dashed,
+}: {
+  color: string;
+  label: string;
+  dashed?: boolean;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+      <span className="inline-flex items-center" aria-hidden>
+        {dashed ? (
+          <svg width="14" height="2" viewBox="0 0 14 2">
+            <line x1="0" y1="1" x2="14" y2="1" stroke={color} strokeWidth="2" strokeDasharray="3 2" />
+          </svg>
+        ) : (
+          <span
+            className="inline-block w-3 h-0.5 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+        )}
+      </span>
+      {label}
+    </span>
   );
 }

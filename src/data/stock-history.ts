@@ -2,8 +2,10 @@ import type { SKU } from "@/lib/types";
 
 export interface StockHistoryPoint {
   date: string;
-  stock: number;
-  dailySales: number;
+  stock?: number;
+  forecast?: number;
+  dailySales?: number;
+  isToday?: boolean;
 }
 
 function hashCode(str: string): number {
@@ -17,7 +19,6 @@ function hashCode(str: string): number {
 
 export function generateStockHistory(sku: SKU): StockHistoryPoint[] {
   const seed = hashCode(sku.id);
-  const points: StockHistoryPoint[] = [];
   const days = 90;
   const today = new Date();
 
@@ -45,9 +46,60 @@ export function generateStockHistory(sku: SKU): StockHistoryPoint[] {
     }
   }
 
-  return data.map((d) => ({
+  const history: StockHistoryPoint[] = data.map((d, idx) => ({
     date: d.date.toISOString().split("T")[0],
     stock: Math.max(0, d.stock),
     dailySales: d.sales,
+    isToday: idx === data.length - 1,
   }));
+
+  // Forecast next 30 days from current stock
+  const forecastDays = 30;
+  const lastStock = history[history.length - 1]?.stock ?? sku.currentStock;
+  // Anchor the forecast line so it joins seamlessly with the actual stock line
+  history[history.length - 1] = {
+    ...history[history.length - 1],
+    forecast: lastStock,
+  };
+  let projected = lastStock;
+  for (let i = 1; i <= forecastDays; i++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + i);
+    // Same deterministic variation pattern, projected forward
+    const variation = 0.7 + (((seed * (i + 1) * 11) % 100) / 100) * 0.6;
+    const projectedSales = Math.round(sku.avgDailySales * variation);
+    projected = Math.max(0, projected - projectedSales);
+    history.push({
+      date: date.toISOString().split("T")[0],
+      forecast: projected,
+    });
+  }
+
+  return history;
+}
+
+export interface ForecastInsight {
+  daysUntilReorder: number | null;
+  reorderDate: string | null;
+  recommendedQty: number;
+}
+
+export function deriveForecastInsight(sku: SKU): ForecastInsight {
+  const today = new Date();
+  const daysUntilReorder =
+    sku.avgDailySales > 0
+      ? Math.max(0, Math.ceil((sku.currentStock - sku.reorderPoint) / sku.avgDailySales))
+      : null;
+  let reorderDate: string | null = null;
+  if (daysUntilReorder !== null) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + daysUntilReorder);
+    reorderDate = d.toISOString().split("T")[0];
+  }
+  // Cover the next ~30 days of demand from the reorder point + lead time buffer
+  const recommendedQty = Math.max(
+    sku.reorderPoint,
+    Math.round(sku.avgDailySales * (30 + sku.leadTimeDays))
+  );
+  return { daysUntilReorder, reorderDate, recommendedQty };
 }

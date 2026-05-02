@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ActionListTable } from "@/components/action-list-table";
 import { CreationModal } from "@/components/creation-modal";
 import { rebalanceActions as seedActions } from "@/data/rebalance-actions";
 import { rebalancingSuggestions } from "@/data/rebalancing";
 import { warehouses } from "@/data/warehouses";
 import { stores } from "@/data/stores";
-import { getItems, addItem } from "@/lib/storage";
+import { getItems, addItem, removeItem } from "@/lib/storage";
 import { toast } from "sonner";
+import { PlusIcon, ShuffleIcon } from "lucide-react";
 import type { RebalanceAction } from "@/lib/types";
 
 export default function RebalancingPage() {
@@ -60,18 +62,41 @@ export default function RebalancingPage() {
   };
 
   return (
-    <div className="p-6 space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-lg font-semibold">Rebalancing</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold tracking-tight">
+              Rebalancing
+            </h1>
+            <Badge variant="secondary">{actions.length}</Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
-            AI-generated inventory redistribution suggestions
+            Move existing inventory between stores — shift stock from lower-demand locations to higher-demand ones, no new purchase order needed.
           </p>
         </div>
-        <Button onClick={() => setModalOpen(true)}>+ New Rebalance</Button>
+        <Button onClick={() => setModalOpen(true)}>
+          <PlusIcon /> New Rebalance
+        </Button>
       </div>
 
-      <ActionListTable items={actions} basePath="/rebalancing" />
+      <ActionListTable
+        items={actions}
+        basePath="/rebalancing"
+        emptyState={{
+          icon: ShuffleIcon,
+          title: "No rebalances yet",
+          description:
+            "Move stock between warehouses to balance regional demand and reduce reorder pressure.",
+          actionLabel: "Create rebalance",
+          onAction: () => setModalOpen(true),
+        }}
+        onRemove={(item) => {
+          setActions((prev) => prev.filter((a) => a.id !== item.id));
+          removeItem<RebalanceAction>("restockd_rebalances", item.id);
+          toast.success(`${item.name} removed`);
+        }}
+      />
 
       <CreationModal
         open={modalOpen}
