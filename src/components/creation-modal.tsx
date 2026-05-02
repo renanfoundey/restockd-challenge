@@ -1,17 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -22,14 +15,20 @@ import {
 import { CategoryMultiSelect } from "@/components/category-multi-select";
 import { warehouses } from "@/data/warehouses";
 import { stores } from "@/data/stores";
-import { SparklesIcon } from "lucide-react";
+import { SparklesIcon, CheckIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type EntityType = "Reorder" | "Replenishment" | "Rebalance";
 
-interface CreationConfig {
+export interface CreationConfig {
   name: string;
+  // Single-destination case (Reorder, Rebalance)
   warehouseId: string;
   storeId: string;
+  // Multi-destination case (Replenishment) — when these are populated they
+  // override the single fields and represent the full distribution scope.
+  warehouseIds?: string[];
+  storeIds?: string[];
   categories: string[];
 }
 
@@ -49,18 +48,30 @@ export function CreationModal({
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
-  const [storeId, setStoreId] = useState("");
+  const [warehouseIds, setWarehouseIds] = useState<string[]>([]);
+  const [storeIds, setStoreIds] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
 
-  const isValid = name.trim() && warehouseId && storeId && categories.length > 0;
+  // Inventory planning is many-to-many in the real world. Replenishment and
+  // Reorder both span warehouses + stores; Rebalance is store-to-store with
+  // no warehouse hop. The single legacy fields stay populated as the
+  // "primary" anchor for back-compat, but the user always picks N of each.
+  const showWarehouses = entityType !== "Rebalance";
+  const storesLabel = entityType === "Rebalance" ? "Stores involved" : "Stores";
+  const warehouseValid = showWarehouses ? warehouseIds.length > 0 : true;
+
+  const isValid =
+    name.trim() &&
+    warehouseValid &&
+    storeIds.length > 0 &&
+    categories.length > 0;
 
   useEffect(() => {
     if (!open) {
       setStep(1);
       setName("");
-      setWarehouseId("");
-      setStoreId("");
+      setWarehouseIds([]);
+      setStoreIds([]);
       setCategories([]);
     }
   }, [open]);
@@ -70,7 +81,14 @@ export function CreationModal({
     setStep(2);
 
     setTimeout(() => {
-      const newId = onComplete({ name: name.trim(), warehouseId, storeId, categories });
+      const newId = onComplete({
+        name: name.trim(),
+        warehouseId: showWarehouses ? warehouseIds[0] : "",
+        storeId: storeIds[0],
+        warehouseIds: showWarehouses ? warehouseIds : undefined,
+        storeIds,
+        categories,
+      });
       onOpenChange(false);
       router.push(`${basePath}/${newId}`);
     }, 2500);
@@ -90,7 +108,11 @@ export function CreationModal({
           </div>
           <DialogDescription>
             {step === 1
-              ? "Configure scope. We'll match SKUs in the next step."
+              ? entityType === "Replenishment"
+                ? "Replenishment distributes one supplier order across multiple warehouses and stores. Pick every destination that should receive stock."
+                : entityType === "Reorder"
+                ? "Reorder routes existing inventory from your warehouses out to stores. Pick all source warehouses and the stores that need replenishment."
+                : "Rebalance moves existing inventory between stores. Pick every store that should be considered as a source or destination."
               : "Analyzing demand patterns and stock levels."}
           </DialogDescription>
           <div className="flex gap-1 pt-1">
@@ -115,36 +137,44 @@ export function CreationModal({
                 placeholder={`e.g. Spring ${entityType}`}
               />
             </div>
+
+            {showWarehouses && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Warehouses</Label>
+                  <span className="text-[11px] text-muted-foreground">
+                    {warehouseIds.length} of {warehouses.length} selected
+                  </span>
+                </div>
+                <ChipMultiSelect
+                  options={warehouses.map((w) => ({
+                    id: w.id,
+                    label: w.name,
+                    sub: w.location,
+                  }))}
+                  selected={warehouseIds}
+                  onChange={setWarehouseIds}
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
-              <Label className="text-sm">Warehouse</Label>
-              <Select value={warehouseId} onValueChange={(v) => v && setWarehouseId(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select warehouse..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name} — {w.location}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">{storesLabel}</Label>
+                <span className="text-[11px] text-muted-foreground">
+                  {storeIds.length} of {stores.length} selected
+                </span>
+              </div>
+              <ChipMultiSelect
+                options={stores.map((s) => ({
+                  id: s.id,
+                  label: s.name,
+                  sub: s.type,
+                }))}
+                selected={storeIds}
+                onChange={setStoreIds}
+              />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm">Store</Label>
-              <Select value={storeId} onValueChange={(v) => v && setStoreId(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select store..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {stores.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} — {s.type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+
             <div className="space-y-1.5">
               <Label className="text-sm">Product Categories</Label>
               <CategoryMultiSelect
@@ -171,15 +201,74 @@ export function CreationModal({
                 AI is finding the right SKUs
               </p>
               <p className="text-xs text-muted-foreground">
-                Analyzing demand patterns, stock levels, and forecasts
+                {entityType === "Rebalance"
+                  ? "Pairing donor and recipient stores by demand and stock-on-hand"
+                  : "Allocating across warehouses and stores based on local demand"}
               </p>
             </div>
             <div className="w-full max-w-xs h-1 rounded-full bg-muted overflow-hidden">
-              <div className="h-full bg-primary animate-pulse" style={{ width: "70%" }} />
+              <div
+                className="h-full bg-primary animate-pulse"
+                style={{ width: "70%" }}
+              />
             </div>
           </div>
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ChipMultiSelect({
+  options,
+  selected,
+  onChange,
+}: {
+  options: { id: string; label: string; sub?: string }[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}): ReactNode {
+  const toggle = (id: string) => {
+    onChange(
+      selected.includes(id)
+        ? selected.filter((s) => s !== id)
+        : [...selected, id]
+    );
+  };
+  return (
+    <div className="rounded-lg border border-border bg-card p-1.5 flex flex-wrap gap-1">
+      {options.map((opt) => {
+        const isSelected = selected.includes(opt.id);
+        return (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => toggle(opt.id)}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+              isSelected
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-card text-foreground border-border hover:bg-muted"
+            )}
+          >
+            {isSelected && <CheckIcon className="size-3" />}
+            <span>{opt.label}</span>
+            {opt.sub && (
+              <span
+                className={cn(
+                  "text-[10px]",
+                  isSelected
+                    ? "text-primary-foreground/70"
+                    : "text-muted-foreground"
+                )}
+              >
+                · {opt.sub}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }

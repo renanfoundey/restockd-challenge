@@ -42,6 +42,14 @@ export interface PurchaseOrder {
   totalCost: number;
 }
 
+// Where the recommended units come from — drives whether reorder can ship
+// immediately to a store or has to wait for purchasing / production.
+export type ReorderAvailability =
+  | "in_warehouse" // Stock is sitting in a warehouse, ready to allocate today
+  | "in_transit" // PO already placed, en route from supplier
+  | "in_production" // Manufacturer is making it; not yet shipped
+  | "needs_po"; // Nothing exists yet — a new PO has to be cut
+
 export interface ReorderRecommendation {
   skuId: string;
   productName: string;
@@ -54,6 +62,18 @@ export interface ReorderRecommendation {
   supplierId: string;
   estimatedCost: number;
   urgency: "High" | "Medium" | "Low";
+  // How sourcing is gated for this SKU. Drives the planner's expectation:
+  // "ready today" vs "wait N days for production".
+  availability: ReorderAvailability;
+  // Units already on hand at the source warehouse, available immediately.
+  warehouseStockOnHand: number;
+  // Where this would ship from, when ready.
+  sourceWarehouseId: string;
+  sourceWarehouseName: string;
+  // Days until the gap can be covered (0 if in_warehouse).
+  estimatedWaitDays: number;
+  // Optional production / PO reference if availability != in_warehouse.
+  productionStatus?: string;
 }
 
 export interface RebalancingSuggestion {
@@ -106,10 +126,20 @@ export interface Store {
 export interface InventoryAction {
   id: string;
   name: string;
+  // Single-destination fallback. Kept for back-compat with the legacy
+  // one-warehouse / one-store actions and for the "primary" anchor view.
   warehouseId: string;
   warehouseName: string;
   storeId: string;
   storeName: string;
+  // Real-world planning is many-to-many: a single replenishment, reorder, or
+  // rebalance routinely fans out across multiple warehouses and stores. When
+  // these arrays are populated they are authoritative — the UI should show
+  // the full list and prefer them over the single-destination fields.
+  warehouseIds?: string[];
+  warehouseNames?: string[];
+  storeIds?: string[];
+  storeNames?: string[];
   categories: string[];
   status: "Draft" | "Processing" | "Ready" | "Approved" | "Completed";
   createdDate: string;

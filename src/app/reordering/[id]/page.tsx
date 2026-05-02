@@ -20,7 +20,7 @@ import { reorderActions } from "@/data/reorder-actions";
 import { getItems } from "@/lib/storage";
 import { splitVariant } from "@/lib/utils";
 import { ArrowLeftIcon, ShareIcon, DownloadIcon, SparklesIcon } from "lucide-react";
-import type { ReorderAction } from "@/lib/types";
+import type { ReorderAction, ReorderRecommendation } from "@/lib/types";
 
 export default function ReorderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -132,7 +132,10 @@ export default function ReorderDetailPage() {
   );
 }
 
+
 function ReorderReasoning({ action }: { action: ReorderAction }) {
+  // All numbers below are derived from the actual recommendations attached to
+  // this action, so the reasoning text always matches the table beneath it.
   const totalUnits = action.recommendations.reduce(
     (s, r) => s + r.recommendedQty,
     0
@@ -146,8 +149,15 @@ function ReorderReasoning({ action }: { action: ReorderAction }) {
   const highUrgency = action.recommendations.filter(
     (r) => r.urgency === "High"
   ).length;
-  // Profit forecast: assume a typical retail markup of 2.4x cost,
-  // and a 30-day sell-through of 65% of recommended quantity.
+  const readyNow = action.recommendations.filter(
+    (r) => r.availability === "in_warehouse"
+  ).length;
+  const gated = action.recommendations.length - readyNow;
+
+  // Profit forecast: a typical retail markup and a 30-day sell-through.
+  // Cost basis is action.totalValue (sum of recommendation estimatedCost),
+  // which is what the metric card "Total Value" displays — keeping the math
+  // visibly consistent end-to-end.
   const SELL_THROUGH = 0.65;
   const MARKUP = 2.4;
   const projectedRevenue = action.totalValue * MARKUP * SELL_THROUGH;
@@ -164,20 +174,26 @@ function ReorderReasoning({ action }: { action: ReorderAction }) {
               Why this reorder was created
             </p>
             <h3 className="text-sm font-semibold tracking-tight mt-0.5">
-              Buy {totalUnits.toLocaleString()} units across{" "}
+              Move {totalUnits.toLocaleString()} units across{" "}
               {distinctProducts} product
-              {distinctProducts === 1 ? "" : "s"} from{" "}
-              {distinctSuppliers.size} manufacturer
-              {distinctSuppliers.size === 1 ? "" : "s"}
+              {distinctProducts === 1 ? "" : "s"} from {action.warehouseName}{" "}
+              to {action.storeName}
             </h3>
           </div>
           <p className="text-sm text-foreground leading-relaxed">
-            Reordering buys new inventory from the manufacturer and routes it
-            through {action.warehouseName} to {action.storeName}. The forecast
-            model flagged {action.recommendations.length.toLocaleString()} SKUs
-            below their reorder point, with {highUrgency} marked High urgency.
-            Bundling them now hits supplier MOQs and lands stock before
-            projected stockout dates. Cost outlay{" "}
+            Reordering ships inventory from the warehouse to the store for
+            individual SKUs the forecast model flagged below their reorder
+            point ({highUrgency} marked High urgency). Of{" "}
+            <strong className="font-semibold tabular-nums">
+              {action.recommendations.length.toLocaleString()}
+            </strong>{" "}
+            recommended SKUs,{" "}
+            <strong className="font-semibold tabular-nums">{readyNow}</strong>{" "}
+            can ship from warehouse stock today; the remaining{" "}
+            <strong className="font-semibold tabular-nums">{gated}</strong> are
+            gated by purchasing or production from{" "}
+            {distinctSuppliers.size} manufacturer
+            {distinctSuppliers.size === 1 ? "" : "s"}. Cost outlay{" "}
             <strong className="font-semibold tabular-nums">
               ${action.totalValue.toLocaleString()}
             </strong>{" "}
@@ -225,6 +241,7 @@ function RecommendationsTable({
               <TableHead className="text-right hidden md:table-cell">Current</TableHead>
               <TableHead className="text-right hidden md:table-cell">Forecast 30d</TableHead>
               <TableHead className="text-right">Recommended</TableHead>
+              <TableHead>Availability</TableHead>
               <TableHead className="hidden xl:table-cell">Reason</TableHead>
               <TableHead className="hidden xl:table-cell">Supplier</TableHead>
               <TableHead className="text-right hidden lg:table-cell">Est. Cost</TableHead>
@@ -263,6 +280,9 @@ function RecommendationsTable({
                   </TableCell>
                   <TableCell className="text-right tabular-nums font-medium">
                     {rec.recommendedQty}
+                  </TableCell>
+                  <TableCell>
+                    <AvailabilityBadge rec={rec} />
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-xs whitespace-normal hidden xl:table-cell">
                     {rec.reason}
@@ -304,6 +324,49 @@ function MetricCard({ label, value }: { label: string; value: string }) {
         {label}
       </p>
       <p className="text-sm font-semibold mt-1 truncate">{value}</p>
+    </div>
+  );
+}
+
+function AvailabilityBadge({ rec }: { rec: ReorderRecommendation }) {
+  // Per-SKU sourcing summary: where the units come from and how long the
+  // gated portion will take.
+  if (rec.availability === "in_warehouse") {
+    return (
+      <div className="space-y-0.5 max-w-[200px]">
+        <Badge variant="success">Ready today</Badge>
+        <p className="text-[10px] text-muted-foreground">
+          {rec.warehouseStockOnHand.toLocaleString()} units at{" "}
+          {rec.sourceWarehouseName}
+        </p>
+      </div>
+    );
+  }
+  const variant =
+    rec.availability === "in_transit"
+      ? "info"
+      : rec.availability === "in_production"
+      ? "warning"
+      : "destructive";
+  const label =
+    rec.availability === "in_transit"
+      ? "In transit"
+      : rec.availability === "in_production"
+      ? "In production"
+      : "Needs PO";
+  const coverage =
+    rec.warehouseStockOnHand > 0
+      ? `${rec.warehouseStockOnHand.toLocaleString()} / ${rec.recommendedQty.toLocaleString()} on hand`
+      : `0 / ${rec.recommendedQty.toLocaleString()} on hand`;
+  return (
+    <div className="space-y-0.5 max-w-[220px]">
+      <Badge variant={variant}>{label}</Badge>
+      <p className="text-[10px] text-muted-foreground leading-tight">
+        +{rec.estimatedWaitDays}d {rec.productionStatus ? `· ${rec.productionStatus}` : ""}
+      </p>
+      <p className="text-[10px] text-muted-foreground leading-tight">
+        {coverage} at {rec.sourceWarehouseName}
+      </p>
     </div>
   );
 }

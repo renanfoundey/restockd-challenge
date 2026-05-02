@@ -33,29 +33,59 @@ export default function ReplenishmentPage() {
     name: string;
     warehouseId: string;
     storeId: string;
+    warehouseIds?: string[];
+    storeIds?: string[];
     categories: string[];
   }) => {
-    const warehouse = warehouses.find((w) => w.id === config.warehouseId)!;
-    const store = stores.find((s) => s.id === config.storeId)!;
     const supplier = suppliers[0];
     const recs = recommendations.slice(0, 5);
-    const lineItems = recs.map((r) => ({
-      skuId: r.skuId,
-      productName: r.productName,
-      quantity: r.recommendedQty,
-      unitCost: r.estimatedCost / r.recommendedQty,
-      lineTotal: r.estimatedCost,
-    }));
+
+    // A replenishment routinely fans out across multiple warehouses + stores.
+    // Distribute each line item deterministically across the chosen
+    // destinations so every selected warehouse/store gets a real share.
+    const selectedWarehouseIds = config.warehouseIds?.length
+      ? config.warehouseIds
+      : [config.warehouseId];
+    const selectedStoreIds = config.storeIds?.length
+      ? config.storeIds
+      : [config.storeId];
+
+    const selectedWarehouses = selectedWarehouseIds.map(
+      (id) => warehouses.find((w) => w.id === id)!
+    );
+    const selectedStores = selectedStoreIds.map(
+      (id) => stores.find((s) => s.id === id)!
+    );
+
+    const lineItems = recs.map((r, idx) => {
+      const wh = selectedWarehouses[idx % selectedWarehouses.length];
+      const st = selectedStores[idx % selectedStores.length];
+      return {
+        skuId: r.skuId,
+        productName: r.productName,
+        quantity: r.recommendedQty,
+        unitCost: r.estimatedCost / r.recommendedQty,
+        lineTotal: r.estimatedCost,
+        destinationWarehouseId: wh.id,
+        destinationWarehouseName: wh.name,
+        destinationStoreId: st.id,
+        destinationStoreName: st.name,
+      };
+    });
     const id = `POA-${String(actions.length + 1).padStart(3, "0")}`;
 
     const newAction: PurchaseOrderAction = {
       id,
       name: config.name,
       type: "purchase-order",
-      warehouseId: config.warehouseId,
-      warehouseName: warehouse.name,
-      storeId: config.storeId,
-      storeName: store.name,
+      warehouseId: selectedWarehouses[0].id,
+      warehouseName: selectedWarehouses[0].name,
+      storeId: selectedStores[0].id,
+      storeName: selectedStores[0].name,
+      warehouseIds: selectedWarehouses.map((w) => w.id),
+      warehouseNames: selectedWarehouses.map((w) => w.name),
+      storeIds: selectedStores.map((s) => s.id),
+      storeNames: selectedStores.map((s) => s.name),
       categories: config.categories,
       status: "Ready",
       createdDate: new Date().toISOString().split("T")[0],

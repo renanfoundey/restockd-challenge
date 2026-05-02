@@ -109,8 +109,16 @@ export default function ReplenishmentDetailPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="Supplier" value={action.supplierName} />
-        <MetricCard label="Warehouse" value={action.warehouseName} />
-        <MetricCard label="Store" value={action.storeName} />
+        <MetricCard
+          label="Warehouses"
+          value={`${action.warehouseNames?.length ?? 1}`}
+          hint={(action.warehouseNames ?? [action.warehouseName]).join(" · ")}
+        />
+        <MetricCard
+          label="Stores"
+          value={`${action.storeNames?.length ?? 1}`}
+          hint={(action.storeNames ?? [action.storeName]).join(" · ")}
+        />
         <MetricCard label="Expected Delivery" value={action.expectedDelivery} />
       </div>
 
@@ -133,7 +141,7 @@ export default function ReplenishmentDetailPage() {
         />
         <MetricCard
           label="Line Items"
-          value={String(action.lineItems.length)}
+          value={action.lineItems.length.toLocaleString()}
         />
       </div>
 
@@ -313,13 +321,29 @@ function LineItemsTable({ action }: { action: PurchaseOrderAction }) {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
         {label}
       </p>
       <p className="text-sm font-semibold mt-1 truncate">{value}</p>
+      {hint && (
+        <p
+          className="text-[11px] text-muted-foreground mt-1 line-clamp-2"
+          title={hint}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

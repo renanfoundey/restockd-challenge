@@ -95,6 +95,14 @@ export default function RebalanceDetailPage() {
     (sum, s) => sum + s.suggestedQty,
     0
   );
+  const sourceStoreIds = new Set(action.suggestions.map((s) => s.fromStore));
+  const destStoreIds = new Set(action.suggestions.map((s) => s.toStore));
+  const sourceStoresCount = sourceStoreIds.size;
+  const destStoresCount = destStoreIds.size;
+  const sourceStoresList = [...sourceStoreIds]
+    .map(storeNameOf)
+    .join(" · ");
+  const destStoresList = [...destStoreIds].map(storeNameOf).join(" · ");
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -128,8 +136,16 @@ export default function RebalanceDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricCard label="Warehouse" value={action.warehouseName} />
-        <MetricCard label="Store" value={action.storeName} />
+        <MetricCard
+          label="Source Stores"
+          value={String(sourceStoresCount)}
+          hint={sourceStoresList}
+        />
+        <MetricCard
+          label="Destination Stores"
+          value={String(destStoresCount)}
+          hint={destStoresList}
+        />
         <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
             Categories
@@ -161,9 +177,15 @@ export default function RebalanceDetailPage() {
 }
 
 function RebalanceReasoning({ action }: { action: RebalanceAction }) {
+  // All numbers below derive from action.suggestions so they always agree
+  // with the table and the metric cards above. Rebalancing is store-to-store
+  // — no warehouses involved, no supplier lead time, no new procurement.
   const totalQty = action.suggestions.reduce((s, x) => s + x.suggestedQty, 0);
   const sourceStores = new Set(action.suggestions.map((s) => s.fromStore));
   const destStores = new Set(action.suggestions.map((s) => s.toStore));
+  const distinctProducts = new Set(
+    action.suggestions.map((s) => s.productName)
+  ).size;
   return (
     <div className="rounded-xl border border-primary/20 bg-primary/5 p-5 shadow-xs">
       <div className="flex items-start gap-3">
@@ -176,7 +198,9 @@ function RebalanceReasoning({ action }: { action: RebalanceAction }) {
               Why this rebalance was created
             </p>
             <h3 className="text-sm font-semibold tracking-tight mt-0.5">
-              Move {totalQty.toLocaleString()} units across{" "}
+              Transfer {totalQty.toLocaleString()} units of{" "}
+              {distinctProducts} product
+              {distinctProducts === 1 ? "" : "s"} from{" "}
               {sourceStores.size} source store
               {sourceStores.size === 1 ? "" : "s"} into{" "}
               {destStores.size} higher-demand store
@@ -184,13 +208,20 @@ function RebalanceReasoning({ action }: { action: RebalanceAction }) {
             </h3>
           </div>
           <p className="text-sm text-foreground leading-relaxed">
-            Rebalancing shifts existing inventory between stores — no new
-            purchase order, no supplier lead time. The forecast model spotted
-            stores holding excess stock against soft demand while sister stores
-            are flagged Critical or Low Stock. Executing these{" "}
-            {action.suggestions.length.toLocaleString()} transfers should clear
-            the donor stores and restore coverage at the destinations within a
-            few business days.
+            Rebalancing moves existing store inventory store-to-store — no
+            warehouse hop, no purchase order, no supplier lead time. The
+            forecast model spotted stores holding excess stock against soft
+            demand while sister stores are flagged Critical or Low Stock.
+            Executing these{" "}
+            <strong className="font-semibold tabular-nums">
+              {action.suggestions.length.toLocaleString()}
+            </strong>{" "}
+            transfers totals{" "}
+            <strong className="font-semibold tabular-nums">
+              {totalQty.toLocaleString()} units
+            </strong>{" "}
+            and should clear the donor stores and restore coverage at the
+            destinations within a few business days.
           </p>
         </div>
       </div>
@@ -280,13 +311,29 @@ function SuggestionsTable({
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
         {label}
       </p>
       <p className="text-sm font-semibold mt-1 truncate">{value}</p>
+      {hint && (
+        <p
+          className="text-[11px] text-muted-foreground mt-1 line-clamp-2"
+          title={hint}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

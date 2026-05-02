@@ -1,7 +1,23 @@
-import { ReorderRecommendation } from "@/lib/types";
+import {
+  ReorderRecommendation,
+  ReorderAvailability,
+} from "@/lib/types";
 import { suppliers } from "./suppliers";
+import { warehouses } from "./warehouses";
 
-const baseRecommendations: ReorderRecommendation[] = [
+// Base records carry the demand-side data; availability + sourcing fields
+// are derived at the bottom so we don't have to spell them out per row.
+type BaseRec = Omit<
+  ReorderRecommendation,
+  | "availability"
+  | "warehouseStockOnHand"
+  | "sourceWarehouseId"
+  | "sourceWarehouseName"
+  | "estimatedWaitDays"
+  | "productionStatus"
+>;
+
+const baseRecommendations: BaseRec[] = [
   {
     skuId: "SKU-1005",
     productName: "Alpine Puffer Jacket",
@@ -419,11 +435,76 @@ const URGENCY_CYCLE: ReorderRecommendation["urgency"][] = [
   "Low",
 ];
 
+// Cycle availability across the catalog so a typical reorder includes a mix
+// of "ready to ship today" (drawn from warehouse) and "wait for production"
+// (gated on a new PO). Distribution targets ~45/20/20/15 — most lines should
+// be coverable from existing stock; a meaningful tail needs new procurement.
+const AVAILABILITY_CYCLE: ReorderAvailability[] = [
+  "in_warehouse",
+  "in_warehouse",
+  "in_warehouse",
+  "in_warehouse",
+  "in_transit",
+  "in_transit",
+  "in_production",
+  "in_production",
+  "needs_po",
+  "needs_po",
+];
+
+const productionStatusFor = (
+  availability: ReorderAvailability,
+  supplierLeadTime: number
+): { wait: number; status: string | undefined } => {
+  switch (availability) {
+    case "in_warehouse":
+      return { wait: 0, status: undefined };
+    case "in_transit":
+      return { wait: Math.max(2, Math.round(supplierLeadTime * 0.3)), status: "PO in transit" };
+    case "in_production":
+      return {
+        wait: Math.max(5, Math.round(supplierLeadTime * 0.7)),
+        status: "Manufacturing in progress",
+      };
+    case "needs_po":
+    default:
+      return { wait: supplierLeadTime + 7, status: "New PO required" };
+  }
+};
+
+function enrich(r: BaseRec, idx: number): ReorderRecommendation {
+  const sup = suppliers.find((s) => s.id === r.supplierId);
+  const supLT = sup?.leadTimeDays ?? 14;
+  const availability = AVAILABILITY_CYCLE[idx % AVAILABILITY_CYCLE.length];
+  const { wait, status } = productionStatusFor(availability, supLT);
+  // Warehouse stock-on-hand only meaningful when sourcing from warehouse;
+  // model it as covering a portion of the recommended qty so planners can
+  // see "you have 320 of 500 already, the rest is gated".
+  const onHand =
+    availability === "in_warehouse"
+      ? r.recommendedQty
+      : availability === "in_transit"
+      ? Math.round(r.recommendedQty * 0.4)
+      : availability === "in_production"
+      ? Math.round(r.recommendedQty * 0.15)
+      : 0;
+  const wh = warehouses[idx % warehouses.length];
+  return {
+    ...r,
+    availability,
+    warehouseStockOnHand: onHand,
+    sourceWarehouseId: wh?.id ?? "WH-EAST-01",
+    sourceWarehouseName: wh?.name ?? "East Distribution Center",
+    estimatedWaitDays: wait,
+    productionStatus: status,
+  };
+}
+
 export const recommendations: ReorderRecommendation[] = Array.from(
   { length: REC_COPIES },
   (_, i) =>
-    baseRecommendations.map((r, idx) => {
-      if (i === 0) return r;
+    baseRecommendations.map((r, idx): ReorderRecommendation => {
+      if (i === 0) return enrich(r, idx);
       const seed = (idx + i * 7) % 11;
       const qtyMul = 0.55 + (seed / 11) * 1.1;
       const sup = suppliers.find((s) => s.id === r.supplierId);
@@ -432,7 +513,7 @@ export const recommendations: ReorderRecommendation[] = Array.from(
       // Recommendations must always respect supplier MOQ
       if (moq > 0 && recommendedQty < moq) recommendedQty = moq;
       const unitCost = r.estimatedCost / Math.max(1, r.recommendedQty);
-      return {
+      const variant: BaseRec = {
         ...r,
         skuId: `${r.skuId}-${REC_LABELS[i]}`,
         currentStock: Math.max(0, Math.round(r.currentStock * (0.4 + seed / 22))),
@@ -443,5 +524,7 @@ export const recommendations: ReorderRecommendation[] = Array.from(
         estimatedCost: Math.round(unitCost * recommendedQty * 100) / 100,
         urgency: URGENCY_CYCLE[(idx + i) % URGENCY_CYCLE.length],
       };
+      // Vary availability across copies so each action sees a healthy mix
+      return enrich(variant, idx + i * 3);
     })
 ).flat();

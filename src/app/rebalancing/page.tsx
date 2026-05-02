@@ -32,21 +32,41 @@ export default function RebalancingPage() {
     name: string;
     warehouseId: string;
     storeId: string;
+    warehouseIds?: string[];
+    storeIds?: string[];
     categories: string[];
   }) => {
-    const warehouse = warehouses.find((w) => w.id === config.warehouseId)!;
-    const store = stores.find((s) => s.id === config.storeId)!;
-    const suggestions = rebalancingSuggestions.slice(0, 5);
+    // Rebalance is store-to-store only — no warehouse hop. The user picks N
+    // stores; suggestions move stock between them.
+    const selectedStoreIds = config.storeIds?.length
+      ? config.storeIds
+      : [config.storeId];
+    const selectedStores = selectedStoreIds
+      .map((id) => stores.find((s) => s.id === id))
+      .filter(Boolean) as { id: string; name: string }[];
+
+    // Filter suggestions to only those whose from/to are in the chosen stores
+    const inScope = rebalancingSuggestions.filter(
+      (s) =>
+        selectedStoreIds.includes(s.fromStore) &&
+        selectedStoreIds.includes(s.toStore)
+    );
+    const suggestions = (inScope.length > 0 ? inScope : rebalancingSuggestions).slice(
+      0,
+      Math.max(20, selectedStores.length * 8)
+    );
     const id = `RBA-${String(actions.length + 1).padStart(3, "0")}`;
 
     const newAction: RebalanceAction = {
       id,
       name: config.name,
       type: "rebalance",
-      warehouseId: config.warehouseId,
-      warehouseName: warehouse.name,
-      storeId: config.storeId,
-      storeName: store.name,
+      warehouseId: "",
+      warehouseName: "",
+      storeId: selectedStores[0]?.id ?? "",
+      storeName: selectedStores[0]?.name ?? "",
+      storeIds: selectedStores.map((s) => s.id),
+      storeNames: selectedStores.map((s) => s.name),
       categories: config.categories,
       status: "Ready",
       createdDate: new Date().toISOString().split("T")[0],
@@ -83,11 +103,13 @@ export default function RebalancingPage() {
       <ActionListTable
         items={actions}
         basePath="/rebalancing"
+        hideWarehouse
+        storeColumnLabel="Anchor Store"
         emptyState={{
           icon: ShuffleIcon,
           title: "No rebalances yet",
           description:
-            "Move stock between warehouses to balance regional demand and reduce reorder pressure.",
+            "Shift existing inventory store-to-store, from lower-demand locations to higher-demand ones — no warehouse hop, no purchase order.",
           actionLabel: "Create rebalance",
           onAction: () => setModalOpen(true),
         }}

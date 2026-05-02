@@ -32,10 +32,26 @@ export default function ReorderingPage() {
     name: string;
     warehouseId: string;
     storeId: string;
+    warehouseIds?: string[];
+    storeIds?: string[];
     categories: string[];
   }) => {
-    const warehouse = warehouses.find((w) => w.id === config.warehouseId)!;
-    const store = stores.find((s) => s.id === config.storeId)!;
+    // Reorder is many warehouses → many stores. Each picked warehouse acts as
+    // a source for one or more stores; the AI generates per-SKU
+    // recommendations across the whole graph.
+    const selectedWarehouseIds = config.warehouseIds?.length
+      ? config.warehouseIds
+      : [config.warehouseId];
+    const selectedStoreIds = config.storeIds?.length
+      ? config.storeIds
+      : [config.storeId];
+    const selectedWarehouses = selectedWarehouseIds
+      .map((id) => warehouses.find((w) => w.id === id))
+      .filter(Boolean) as { id: string; name: string }[];
+    const selectedStores = selectedStoreIds
+      .map((id) => stores.find((s) => s.id === id))
+      .filter(Boolean) as { id: string; name: string }[];
+
     const filtered = recommendations.filter((r) =>
       config.categories.some((cat) =>
         r.productName.toLowerCase().includes(cat.toLowerCase())
@@ -48,10 +64,14 @@ export default function ReorderingPage() {
       id,
       name: config.name,
       type: "reorder",
-      warehouseId: config.warehouseId,
-      warehouseName: warehouse.name,
-      storeId: config.storeId,
-      storeName: store.name,
+      warehouseId: selectedWarehouses[0]?.id ?? "",
+      warehouseName: selectedWarehouses[0]?.name ?? "",
+      storeId: selectedStores[0]?.id ?? "",
+      storeName: selectedStores[0]?.name ?? "",
+      warehouseIds: selectedWarehouses.map((w) => w.id),
+      warehouseNames: selectedWarehouses.map((w) => w.name),
+      storeIds: selectedStores.map((s) => s.id),
+      storeNames: selectedStores.map((s) => s.name),
       categories: config.categories,
       status: "Ready",
       createdDate: new Date().toISOString().split("T")[0],
@@ -78,7 +98,7 @@ export default function ReorderingPage() {
               <Badge variant="secondary">{actions.length}</Badge>
             </div>
             <p className="text-sm text-muted-foreground">
-              Targeted reorders for individual SKUs flagged by the forecast model. Routes new stock from supplier through your warehouse to a single store.
+              Move existing inventory from your warehouses out to the stores that need it most. Surfaces production gaps when warehouse stock isn't enough.
             </p>
           </div>
         </div>

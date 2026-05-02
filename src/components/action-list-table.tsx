@@ -28,11 +28,15 @@ export function ActionListTable({
   basePath,
   emptyState,
   onRemove,
+  hideWarehouse,
+  storeColumnLabel = "Store",
 }: {
   items: InventoryAction[];
   basePath: string;
   emptyState?: EmptyState;
   onRemove?: (item: InventoryAction) => void;
+  hideWarehouse?: boolean;
+  storeColumnLabel?: string;
 }) {
   if (items.length === 0) {
     if (emptyState) {
@@ -71,8 +75,8 @@ export function ActionListTable({
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
-            <TableHead>Warehouse</TableHead>
-            <TableHead>Store</TableHead>
+            {!hideWarehouse && <TableHead>Warehouse</TableHead>}
+            <TableHead>{storeColumnLabel}</TableHead>
             <TableHead>Categories</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">SKUs</TableHead>
@@ -98,11 +102,23 @@ export function ActionListTable({
                   <ArrowRightIcon className="size-3.5 opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
                 </Link>
               </TableCell>
+              {!hideWarehouse && (
+                <TableCell className="text-xs text-muted-foreground">
+                  <DestinationCell
+                    ids={item.warehouseIds}
+                    names={item.warehouseNames}
+                    fallback={item.warehouseName}
+                    noun="warehouse"
+                  />
+                </TableCell>
+              )}
               <TableCell className="text-xs text-muted-foreground">
-                {item.warehouseName}
-              </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {item.storeName}
+                <DestinationCell
+                  ids={item.storeIds}
+                  names={item.storeNames}
+                  fallback={item.storeName}
+                  noun="store"
+                />
               </TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
@@ -156,5 +172,27 @@ export function ActionListTable({
         </TableBody>
       </Table>
     </div>
+  );
+}
+
+function DestinationCell({
+  ids,
+  names,
+  fallback,
+  noun,
+}: {
+  ids?: string[];
+  names?: string[];
+  fallback: string;
+  noun: string;
+}) {
+  if (!ids || ids.length <= 1 || !names) {
+    const value = names?.[0] ?? fallback;
+    return <span>{value || "—"}</span>;
+  }
+  return (
+    <span title={names.join(" · ")}>
+      {ids.length} {noun}s
+    </span>
   );
 }
